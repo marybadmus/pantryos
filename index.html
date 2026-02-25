@@ -542,9 +542,8 @@ let currentTab = 'dashboard';
 
 function showTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.nav-btn').forEach((b, i) => {
-    const tabs = ['dashboard','inventory','shopping','monthend','analysis','importexport','settings'];
-    b.classList.toggle('active', tabs[i] === tab);
+  document.querySelectorAll('.nav-btn[data-tab]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
   });
   renderTab();
 }
