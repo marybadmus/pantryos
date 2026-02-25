@@ -1,0 +1,2490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0f11">
+<title>PantryOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0e0f11;
+  --surface: #16181c;
+  --surface2: #1e2128;
+  --border: #2a2d35;
+  --accent: #c8f55a;
+  --accent2: #5af5c8;
+  --accent3: #f55a8a;
+  --accent4: #f5c85a;
+  --text: #e8eaf0;
+  --text2: #8b8fa0;
+  --text3: #555a6b;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'Syne', sans-serif;
+  --radius: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  display: flex;
+  flex-direction: column;
+}
+
+/* HEADER */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  z-index: 100;
+}
+.logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.logo span { color: var(--accent); }
+.header-right { display: flex; gap: 10px; align-items: center; }
+.cycle-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 10px;
+  color: var(--text2);
+}
+.cycle-badge span { color: var(--accent4); }
+
+/* NAV */
+.nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.nav::-webkit-scrollbar { display: none; }
+.nav-btn {
+  padding: 12px 18px;
+  border: none;
+  background: none;
+  color: var(--text2);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  position: relative;
+}
+.nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-btn:hover:not(.active) { color: var(--text); }
+
+/* MAIN */
+.main { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* CARDS */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+
+/* STATS GRID */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.stat-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+.stat-value { font-size: 26px; font-weight: 800; line-height: 1; }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--text2); margin-top: 4px; }
+.green { color: var(--accent); }
+.teal { color: var(--accent2); }
+.red { color: var(--accent3); }
+.yellow { color: var(--accent4); }
+
+/* SECTION HEADER */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+.btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #0e0f11; }
+.btn-primary:hover { background: #d4ff66; }
+.btn-outline { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--text2); color: var(--text); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-danger { background: var(--accent3); color: #fff; }
+.btn-teal { background: var(--accent2); color: #0e0f11; }
+.btn-yellow { background: var(--accent4); color: #0e0f11; }
+
+/* PRODUCT LIST */
+.product-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.product-item:hover { border-color: var(--text3); }
+.product-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.product-name { font-size: 14px; font-weight: 700; }
+.product-price { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 500; }
+.product-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+.tag-monthly { background: #1a2d0e; color: var(--accent); border: 1px solid #2d5018; }
+.tag-quarterly { background: #1a1d2d; color: var(--accent2); border: 1px solid #18305a; }
+.tag-category {
+  background: var(--surface);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.tag-store { color: var(--text3); font-family: var(--mono); font-size: 10px; }
+.product-stock { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.stock-bar-wrap { flex: 1; background: var(--border); border-radius: 4px; height: 4px; }
+.stock-bar { height: 4px; border-radius: 4px; transition: width 0.3s; }
+.stock-label { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+
+/* FORM */
+.form-grid { display: grid; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text2); }
+input, select, textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 10px 12px;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+select option { background: var(--surface2); }
+textarea { resize: vertical; min-height: 70px; }
+
+/* MODAL */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  align-items: flex-end;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.modal-title { font-size: 18px; font-weight: 800; }
+.modal-close { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 18px; line-height: 1; font-family: var(--sans); }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+/* TABS inside modal */
+.inner-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.inner-tab {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  transition: all 0.15s;
+}
+.inner-tab.active { background: var(--accent); color: #0e0f11; border-color: var(--accent); }
+
+/* ANALYSIS */
+.analysis-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.analysis-row:last-child { border-bottom: none; }
+.analysis-name { flex: 1; font-size: 13px; font-weight: 600; }
+.analysis-bar-wrap { width: 120px; background: var(--border); border-radius: 4px; height: 6px; }
+.analysis-bar { height: 6px; border-radius: 4px; }
+.analysis-val { font-family: var(--mono); font-size: 12px; color: var(--text2); width: 60px; text-align: right; }
+
+/* CSV INFO BOX */
+.info-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent2);
+  border-radius: var(--radius);
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.8;
+  margin-bottom: 14px;
+}
+.info-box strong { color: var(--accent2); }
+
+/* MONTH END LOG */
+.log-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.log-item:last-child { border-bottom: none; }
+.log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.log-text { flex: 1; font-size: 13px; line-height: 1.5; }
+.log-time { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+/* Shopping list */
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.shop-item:last-child { border-bottom: none; }
+.shop-check {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.shop-check.checked { background: var(--accent); border-color: var(--accent); }
+.shop-check.checked::after { content: '✓'; color: #0e0f11; font-size: 12px; font-weight: 800; }
+.shop-name { flex: 1; font-size: 13px; font-weight: 600; }
+.shop-name.checked-text { text-decoration: line-through; color: var(--text3); }
+.shop-store { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+/* EMPTY STATE */
+.empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+.empty h3 { font-size: 16px; font-weight: 700; color: var(--text2); margin-bottom: 6px; }
+.empty p { font-size: 13px; line-height: 1.5; }
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--accent);
+  color: #0e0f11;
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 13px;
+  z-index: 300;
+  transition: transform 0.3s ease;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* DIVIDER */
+.divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+/* SEARCH */
+.search-wrap { position: relative; margin-bottom: 14px; }
+.search-wrap input { padding-left: 36px; }
+.search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 14px; }
+
+/* FILTERS */
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.filter-chip.active { background: var(--accent); color: #0e0f11; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Pantry<span>OS</span></div>
+  <div class="header-right">
+    <div class="cycle-badge">Cycle: <span id="current-cycle-label">Mar 2025</span></div>
+  </div>
+</div>
+
+<div class="nav">
+  <button class="nav-btn active" onclick="showTab('dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="showTab('inventory')">Inventory</button>
+  <button class="nav-btn" onclick="showTab('shopping')">Shopping List</button>
+  <button class="nav-btn" onclick="showTab('monthend')">Month-End</button>
+  <button class="nav-btn" onclick="showTab('analysis')">Analysis</button>
+  <button class="nav-btn" onclick="showTab('importexport')">CSV</button>
+  <button class="nav-btn" onclick="showTab('settings')">Settings</button>
+</div>
+
+<div class="main" id="main-content">
+  <!-- Dynamic content here -->
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-inner">
+    <!-- dynamic -->
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===================== DATA STORE =====================
+const STORAGE_KEY = 'pantryos_v1';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return getDefaultData();
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getDefaultData() {
+  return {
+    products: [],
+    purchases: [],
+    monthEndLogs: [],
+    stores: ['Walmart', 'Costco'],
+    settings: {
+      currentCycle: getCurrentCycleKey(),
+      currency: '₦'
+    }
+  };
+}
+
+function getCurrentCycleKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+function formatCycleLabel(key) {
+  const [y, m] = key.split('-');
+  return new Date(y, m-1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+let state = loadData();
+
+// ===================== CATEGORIES =====================
+const CATEGORIES = [
+  'Proteins', 'Grains & Carbs', 'Dairy & Eggs', 'Fruits', 'Vegetables',
+  'Legumes & Pulses', 'Fats & Oils', 'Beverages', 'Snacks & Confectionery',
+  'Condiments & Sauces', 'Spices & Herbs', 'Baking Supplies',
+  'Frozen Foods', 'Canned & Preserved', 'Cleaning Supplies',
+  'Personal Care', 'Paper & Household', 'Baby & Infant', 'Pet Supplies', 'Other'
+];
+
+const CAT_COLORS = {
+  'Proteins': '#f55a8a',
+  'Grains & Carbs': '#f5c85a',
+  'Dairy & Eggs': '#5af5c8',
+  'Fruits': '#c8f55a',
+  'Vegetables': '#5af55a',
+  'Legumes & Pulses': '#f5a05a',
+  'Fats & Oils': '#a05af5',
+  'Beverages': '#5ab8f5',
+  'Snacks & Confectionery': '#f55a5a',
+  'Condiments & Sauces': '#f5f55a',
+  'Spices & Herbs': '#8af55a',
+  'Baking Supplies': '#f5c8a0',
+  'Frozen Foods': '#a0c8f5',
+  'Canned & Preserved': '#c8a05a',
+  'Cleaning Supplies': '#5af5f5',
+  'Personal Care': '#f5a0c8',
+  'Paper & Household': '#c8c8f5',
+  'Baby & Infant': '#f5d0d0',
+  'Pet Supplies': '#d0f5d0',
+  'Other': '#8b8fa0'
+};
+
+// ===================== TABS =====================
+let currentTab = 'dashboard';
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-btn').forEach((b, i) => {
+    const tabs = ['dashboard','inventory','shopping','monthend','analysis','importexport','settings'];
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  renderTab();
+}
+
+function renderTab() {
+  const m = document.getElementById('main-content');
+  switch(currentTab) {
+    case 'dashboard': m.innerHTML = renderDashboard(); break;
+    case 'inventory': m.innerHTML = renderInventory(); break;
+    case 'shopping': m.innerHTML = renderShopping(); break;
+    case 'monthend': m.innerHTML = renderMonthEnd(); break;
+    case 'analysis': m.innerHTML = renderAnalysis(); break;
+    case 'importexport': m.innerHTML = renderCSV(); break;
+    case 'settings': m.innerHTML = renderSettings(); break;
+  }
+  updateCycleLabel();
+}
+
+function updateCycleLabel() {
+  document.getElementById('current-cycle-label').textContent = formatCycleLabel(state.settings.currentCycle);
+}
+
+// ===================== DASHBOARD =====================
+function renderDashboard() {
+  const cycle = state.settings.currentCycle;
+  const products = state.products;
+  const cyclePurchases = state.purchases.filter(p => p.cycle === cycle);
+
+  const totalSpend = cyclePurchases.reduce((s, p) => s + (p.price * p.qty), 0);
+  const extraBuys = cyclePurchases.filter(p => p.isExtra).length;
+  const totalItems = products.length;
+  const stockouts = products.filter(p => (p.currentStock || 0) === 0 && p.plannedQty > 0).length;
+  const overstocked = products.filter(p => (p.currentStock || 0) > (p.plannedQty || 0) * 1.5).length;
+
+  const monthlyItems = products.filter(p => p.cycle === 'monthly');
+  const quarterlyItems = products.filter(p => p.cycle === 'quarterly');
+
+  const recentLogs = state.monthEndLogs.slice(-3).reverse();
+
+  return `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Cycle Spend</div>
+        <div class="stat-value green">${state.settings.currency}${totalSpend.toFixed(0)}</div>
+        <div class="stat-sub">${cyclePurchases.length} purchases</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Extra Buys</div>
+        <div class="stat-value yellow">${extraBuys}</div>
+        <div class="stat-sub">unplanned purchases</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Stock-Outs</div>
+        <div class="stat-value red">${stockouts}</div>
+        <div class="stat-sub">items at 0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overstocked</div>
+        <div class="stat-value teal">${overstocked}</div>
+        <div class="stat-sub">items &gt;150% plan</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cycle Breakdown</div>
+      <div style="display:flex;gap:20px;">
+        <div>
+          <div class="stat-label">Monthly Items</div>
+          <div style="font-size:22px;font-weight:800;color:var(--accent)">${monthlyItems.length}</div>
+        </div>
+        <div>
+          <div class="stat-label">Quarterly Items</div>
+          <div style="font-size:22px;font-weight:800;color:var(--accent2)">${quarterlyItems.length}</div>
+        </div>
+        <div>
+          <div class="stat-label">Total Items</div>
+          <div style="font-size:22px;font-weight:800;color:var(--text)">${totalItems}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">Low Stock Alerts</div>
+    </div>
+    ${renderLowStockAlerts()}
+
+    <div class="section-header" style="margin-top:16px;">
+      <div class="section-title">Recent Activity</div>
+    </div>
+    <div class="card">
+      ${recentLogs.length === 0 ? `<div class="empty"><div class="empty-icon">📋</div><p>No activity yet. Start logging purchases.</p></div>` : ''}
+      ${recentLogs.map(l => `
+        <div class="log-item">
+          <div class="log-dot" style="background:var(--accent2)"></div>
+          <div>
+            <div class="log-text">${l.note}</div>
+            <div class="log-time">${l.date}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="margin-top:8px;display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1" onclick="openAddProduct()">+ Add Product</button>
+      <button class="btn btn-outline" style="flex:1" onclick="openLogPurchase()">Log Purchase</button>
+    </div>
+  `;
+}
+
+function renderLowStockAlerts() {
+  const low = state.products.filter(p => {
+    const stock = p.currentStock || 0;
+    const planned = p.plannedQty || 1;
+    return stock < planned * 0.25;
+  }).slice(0, 5);
+
+  if (low.length === 0) return `<div class="card" style="color:var(--text2);font-size:13px;">✓ No low stock alerts</div>`;
+
+  return `<div class="card">${low.map(p => {
+    const pct = Math.round(((p.currentStock||0) / (p.plannedQty||1)) * 100);
+    return `
+      <div class="analysis-row">
+        <div class="analysis-name">${p.name}</div>
+        <div class="analysis-bar-wrap"><div class="analysis-bar" style="width:${pct}%;background:${pct < 10 ? 'var(--accent3)' : 'var(--accent4)'}"></div></div>
+        <div class="analysis-val" style="color:${pct < 10 ? 'var(--accent3)' : 'var(--accent4)'}">${p.currentStock||0}/${p.plannedQty||0}</div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+// ===================== INVENTORY =====================
+let inventorySearch = '';
+let inventoryFilter = 'all';
+
+function renderInventory() {
+  let products = state.products;
+
+  const cats = ['all', ...new Set(products.map(p => p.category))];
+
+  if (inventorySearch) {
+    products = products.filter(p => p.name.toLowerCase().includes(inventorySearch.toLowerCase()) || (p.category||'').toLowerCase().includes(inventorySearch.toLowerCase()));
+  }
+  if (inventoryFilter !== 'all') {
+    if (inventoryFilter === 'monthly' || inventoryFilter === 'quarterly') {
+      products = products.filter(p => p.cycle === inventoryFilter);
+    } else {
+      products = products.filter(p => p.category === inventoryFilter);
+    }
+  }
+
+  return `
+    <div class="section-header">
+      <div class="section-title">All Products (${state.products.length})</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddProduct()">+ Add</button>
+    </div>
+
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" placeholder="Search products..." value="${inventorySearch}" oninput="inventorySearch=this.value;renderTab()">
+    </div>
+
+    <div class="filters">
+      <div class="filter-chip ${inventoryFilter==='all'?'active':''}" onclick="inventoryFilter='all';renderTab()">All</div>
+      <div class="filter-chip ${inventoryFilter==='monthly'?'active':''}" onclick="inventoryFilter='monthly';renderTab()">Monthly</div>
+      <div class="filter-chip ${inventoryFilter==='quarterly'?'active':''}" onclick="inventoryFilter='quarterly';renderTab()">Quarterly</div>
+      ${CATEGORIES.filter(c => state.products.some(p => p.category === c)).map(c =>
+        `<div class="filter-chip ${inventoryFilter===c?'active':''}" onclick="inventoryFilter='${c}';renderTab()">${c}</div>`
+      ).join('')}
+    </div>
+
+    ${products.length === 0 ? `
+      <div class="empty">
+        <div class="empty-icon">📦</div>
+        <h3>No products yet</h3>
+        <p>Add your first product or import via CSV</p>
+      </div>
+    ` : products.map(p => renderProductCard(p)).join('')}
+  `;
+}
+
+function renderProductCard(p) {
+  const stock = p.currentStock || 0;
+  const planned = p.plannedQty || 1;
+  const pct = Math.min(100, Math.round((stock / planned) * 100));
+  const barColor = pct < 25 ? 'var(--accent3)' : pct < 60 ? 'var(--accent4)' : 'var(--accent)';
+  const price = p.price ? `${state.settings.currency}${parseFloat(p.price).toFixed(2)}` : '—';
+  const catColor = CAT_COLORS[p.category] || '#8b8fa0';
+
+  return `
+    <div class="product-item" onclick="openEditProduct('${p.id}')">
+      <div class="product-top">
+        <div class="product-name">${p.name}</div>
+        <div class="product-price">${price}<span style="color:var(--text3);font-size:10px;">/${p.unit||'unit'}</span></div>
+      </div>
+      <div class="product-meta">
+        <span class="tag ${p.cycle === 'monthly' ? 'tag-monthly' : 'tag-quarterly'}">${p.cycle||'monthly'}</span>
+        <span class="tag-category" style="border-color:${catColor}22;color:${catColor}">${p.category||'Other'}</span>
+        ${p.store ? `<span class="tag-store">@ ${p.store}</span>` : ''}
+      </div>
+      <div class="product-stock">
+        <div class="stock-bar-wrap"><div class="stock-bar" style="width:${pct}%;background:${barColor}"></div></div>
+        <span class="stock-label">${stock}/${planned} ${p.unit||''}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== SHOPPING =====================
+let shopChecked = {};
+
+function renderShopping() {
+  const cycle = state.settings.currentCycle;
+  // Items with low stock
+  const needed = state.products.filter(p => {
+    const stock = p.currentStock || 0;
+    const planned = p.plannedQty || 0;
+    // For quarterly items, only show in relevant months
+    if (p.cycle === 'quarterly') {
+      const month = parseInt(cycle.split('-')[1]);
+      if (month !== 1 && month !== 4 && month !== 7 && month !== 10) return false;
+    }
+    return stock < planned;
+  });
+
+  const extra = state.purchases.filter(p => p.cycle === cycle && p.isExtra);
+
+  return `
+    <div class="section-header">
+      <div class="section-title">Shopping List — ${formatCycleLabel(cycle)}</div>
+      <button class="btn btn-outline btn-sm" onclick="openLogPurchase()">+ Log Buy</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Need to Buy (${needed.length} items)</div>
+    ${needed.length === 0 ? `<div style="color:var(--text2);font-size:13px;">✓ All stocked up!</div>` : ''}
+      ${needed.map(p => {
+        const need = (p.plannedQty||0) - (p.currentStock||0);
+        const checked = shopChecked[p.id];
+        // Find last purchase price for this product
+        const lastBuy = state.purchases.filter(b => b.productId === p.id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+        const lastPrice = lastBuy ? lastBuy.price : p.price;
+        const lastStore = lastBuy ? lastBuy.store : p.store;
+        const estCost = lastPrice ? (lastPrice * need).toFixed(2) : null;
+        return `
+          <div class="shop-item">
+            <div class="shop-check ${checked?'checked':''}" onclick="shopChecked['${p.id}']=!shopChecked['${p.id}'];renderTab()"></div>
+            <div style="flex:1">
+              <div class="shop-name ${checked?'checked-text':''}">${p.name}</div>
+              <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;">
+                <span class="shop-store">Need: <strong style="color:var(--text)">${need} ${p.unit||''}</strong></span>
+                ${lastStore ? `<span class="shop-store">@ ${lastStore}</span>` : ''}
+                ${lastPrice ? `<span class="shop-store" style="color:var(--text2)">Last price: <strong style="color:var(--accent)">${state.settings.currency}${parseFloat(lastPrice).toFixed(2)}</strong></span>` : ''}
+                ${estCost ? `<span class="shop-store" style="color:var(--accent4)">Est: ${state.settings.currency}${estCost}</span>` : ''}
+              </div>
+            </div>
+            <span class="tag ${p.cycle==='monthly'?'tag-monthly':'tag-quarterly'}">${p.cycle}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    ${extra.length > 0 ? `
+    <div class="card" style="border-color:#2d2010;">
+      <div class="card-title" style="color:var(--accent4)">Extra Purchases This Cycle</div>
+      ${extra.map(p => `
+        <div class="shop-item">
+          <div style="flex:1">
+            <div class="shop-name">${p.productName}</div>
+            <div class="shop-store">${p.qty} ${p.unit||''} × ${state.settings.currency}${p.price} @ ${p.store||'—'}</div>
+          </div>
+          <span style="color:var(--accent4);font-family:var(--mono);font-size:12px;">${state.settings.currency}${(p.price * p.qty).toFixed(2)}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    <div style="display:flex;gap:10px;margin-top:8px;">
+      <button class="btn btn-primary" style="flex:1" onclick="openLogPurchase()">Log Purchase</button>
+      <button class="btn btn-teal" style="flex:1" onclick="exportShoppingList()">Export List</button>
+    </div>
+  `;
+}
+
+// ===================== MONTH-END =====================
+function renderMonthEnd() {
+  const cycle = state.settings.currentCycle;
+  const logs = state.monthEndLogs.filter(l => l.cycle === cycle);
+
+  return `
+    <div class="section-header">
+      <div class="section-title">Month-End Close — ${formatCycleLabel(cycle)}</div>
+    </div>
+
+    <div class="card" style="border-color:#1a2d0e;">
+      <div class="card-title">Close Current Cycle</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+        At month-end, record what's left in each item. This calculates stock-out rates and carry-overs.
+      </p>
+      <button class="btn btn-primary" onclick="openMonthEndWizard()">Run Month-End Close</button>
+    </div>
+
+    <div class="section-header" style="margin-top:8px;">
+      <div class="section-title">Cycle Log</div>
+      <button class="btn btn-outline btn-sm" onclick="openAddNote()">+ Note</button>
+    </div>
+
+    <div class="card">
+      ${logs.length === 0 ? `<div class="empty"><div class="empty-icon">📝</div><p>No logs for this cycle yet.</p></div>` : ''}
+      ${logs.map(l => `
+        <div class="log-item">
+          <div class="log-dot" style="background:${l.type==='close'?'var(--accent)':l.type==='extra'?'var(--accent4)':'var(--accent2)'}"></div>
+          <div>
+            <div class="log-text">${l.note}</div>
+            <div class="log-time">${l.date} · ${l.type}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cycle History</div>
+      ${renderCycleHistory()}
+    </div>
+  `;
+}
+
+function renderCycleHistory() {
+  const cycles = [...new Set(state.purchases.map(p => p.cycle))].sort().reverse().slice(0, 6);
+  if (cycles.length === 0) return `<div style="color:var(--text2);font-size:13px;">No history yet.</div>`;
+  return cycles.map(c => {
+    const cyclePurchases = state.purchases.filter(p => p.cycle === c);
+    const total = cyclePurchases.reduce((s, p) => s + (p.price * p.qty), 0);
+    const extras = cyclePurchases.filter(p => p.isExtra).length;
+    return `
+      <div class="analysis-row">
+        <div class="analysis-name">${formatCycleLabel(c)}</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--text2)">${cyclePurchases.length} items</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent4)">${extras} extra</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent)">${state.settings.currency}${total.toFixed(0)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ===================== ANALYSIS =====================
+// ===================== ANALYSIS HELPERS =====================
+let analysisView = 'overview'; // overview | mom | qoq | yoy | prices
+let priceProductFilter = '';
+let priceFromCycle = '';
+let priceToCycle = '';
+
+function cycleSpend(cycleKey) {
+  return state.purchases.filter(p => p.cycle === cycleKey).reduce((s, p) => s + (p.price * p.qty), 0);
+}
+
+function cycleKey(year, month) {
+  return `${year}-${String(month).padStart(2,'0')}`;
+}
+
+function prevMonth(key) {
+  const [y, m] = key.split('-').map(Number);
+  return m === 1 ? cycleKey(y-1, 12) : cycleKey(y, m-1);
+}
+
+function prevQuarter(key) {
+  const [y, m] = key.split('-').map(Number);
+  const newM = m - 3;
+  return newM <= 0 ? cycleKey(y-1, 12+newM) : cycleKey(y, newM);
+}
+
+function prevYear(key) {
+  const [y, m] = key.split('-').map(Number);
+  return cycleKey(y-1, m);
+}
+
+function diffLabel(curr, prev) {
+  if (!prev || prev === 0) return { text: '—', color: 'var(--text3)', arrow: '' };
+  const pct = ((curr - prev) / prev) * 100;
+  const sign = pct >= 0 ? '+' : '';
+  const color = pct > 0 ? 'var(--accent3)' : 'var(--accent)';
+  const arrow = pct > 0 ? '↑' : '↓';
+  return { text: `${sign}${pct.toFixed(1)}%`, color, arrow, raw: pct };
+}
+
+function formatMoney(v) {
+  return `${state.settings.currency}${v.toLocaleString('en-NG', {minimumFractionDigits:0, maximumFractionDigits:0})}`;
+}
+
+function allCycles() {
+  return [...new Set(state.purchases.map(p => p.cycle))].sort();
+}
+
+function getProductPriceHistory(productId) {
+  return state.purchases
+    .filter(p => p.productId === productId && p.price > 0)
+    .sort((a,b) => a.cycle.localeCompare(b.cycle));
+}
+
+// ===================== RENDER ANALYSIS =====================
+function renderAnalysis() {
+  return `
+    <div class="inner-tabs" style="margin-bottom:16px;">
+      <div class="inner-tab ${analysisView==='overview'?'active':''}" onclick="analysisView='overview';renderTab()">Overview</div>
+      <div class="inner-tab ${analysisView==='mom'?'active':''}" onclick="analysisView='mom';renderTab()">MoM</div>
+      <div class="inner-tab ${analysisView==='qoq'?'active':''}" onclick="analysisView='qoq';renderTab()">QoQ</div>
+      <div class="inner-tab ${analysisView==='yoy'?'active':''}" onclick="analysisView='yoy';renderTab()">YoY</div>
+      <div class="inner-tab ${analysisView==='prices'?'active':''}" onclick="analysisView='prices';renderTab()">Price Tracker</div>
+    </div>
+    ${analysisView === 'overview' ? renderAnalysisOverview() : ''}
+    ${analysisView === 'mom' ? renderMoM() : ''}
+    ${analysisView === 'qoq' ? renderQoQ() : ''}
+    ${analysisView === 'yoy' ? renderYoY() : ''}
+    ${analysisView === 'prices' ? renderPriceTracker() : ''}
+  `;
+}
+
+function renderAnalysisOverview() {
+  const products = state.products;
+  const purchases = state.purchases;
+  const cycle = state.settings.currentCycle;
+
+  const byCategory = {};
+  CATEGORIES.forEach(c => { byCategory[c] = { count: 0, spend: 0, stockouts: 0 }; });
+  products.forEach(p => {
+    const cat = p.category || 'Other';
+    if (!byCategory[cat]) byCategory[cat] = { count: 0, spend: 0, stockouts: 0 };
+    byCategory[cat].count++;
+    if ((p.currentStock || 0) === 0 && p.plannedQty > 0) byCategory[cat].stockouts++;
+  });
+  purchases.filter(p => p.cycle === cycle).forEach(p => {
+    const prod = products.find(pr => pr.id === p.productId);
+    const cat = prod?.category || 'Other';
+    if (!byCategory[cat]) byCategory[cat] = { count: 0, spend: 0, stockouts: 0 };
+    byCategory[cat].spend += p.price * p.qty;
+  });
+
+  const activeCats = Object.entries(byCategory).filter(([,v]) => v.count > 0 || v.spend > 0).sort((a,b) => b[1].spend - a[1].spend);
+  const maxSpend = Math.max(...activeCats.map(([,v]) => v.spend), 1);
+
+  const totalPlanned = products.filter(p => p.plannedQty > 0);
+  const stockoutRate = totalPlanned.length ? Math.round((totalPlanned.filter(p => (p.currentStock||0) === 0).length / totalPlanned.length) * 100) : 0;
+  const overstockRate = totalPlanned.length ? Math.round((totalPlanned.filter(p => (p.currentStock||0) > (p.plannedQty||0) * 1.5).length / totalPlanned.length) * 100) : 0;
+  const extraRate = purchases.filter(p => p.cycle === cycle && p.isExtra).length;
+
+  const byStore = {};
+  purchases.forEach(p => {
+    const s = p.store || 'Unknown';
+    if (!byStore[s]) byStore[s] = 0;
+    byStore[s] += p.price * p.qty;
+  });
+
+  return `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Stock-Out Rate</div>
+        <div class="stat-value red">${stockoutRate}%</div>
+        <div class="stat-sub">of planned items</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Overstock Rate</div>
+        <div class="stat-value teal">${overstockRate}%</div>
+        <div class="stat-sub">&gt;150% of plan</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Spend by Category — ${formatCycleLabel(cycle)}</div>
+      ${activeCats.length === 0 ? `<div style="color:var(--text2);font-size:13px;">Log purchases to see analysis.</div>` : ''}
+      ${activeCats.map(([cat, v]) => {
+        const pct = Math.round((v.spend / maxSpend) * 100);
+        const color = CAT_COLORS[cat] || '#8b8fa0';
+        return `<div class="analysis-row">
+          <div class="analysis-name" style="color:${color}">${cat}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">${v.count}i / ${v.stockouts}out</div>
+          <div class="analysis-bar-wrap"><div class="analysis-bar" style="width:${Math.max(pct,2)}%;background:${color}"></div></div>
+          <div class="analysis-val">${formatMoney(v.spend)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title">Spend by Store (All Time)</div>
+      ${Object.entries(byStore).length === 0 ? `<div style="color:var(--text2);font-size:13px;">No data yet.</div>` : ''}
+      ${Object.entries(byStore).sort((a,b)=>b[1]-a[1]).map(([store, spend]) => `
+        <div class="analysis-row">
+          <div class="analysis-name">${store}</div>
+          <div class="analysis-val" style="color:var(--accent)">${formatMoney(spend)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title">Cycle Summary</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;">
+        <div><div class="stat-label">Monthly Items</div><div style="font-size:22px;font-weight:800;color:var(--accent)">${products.filter(p=>p.cycle==='monthly').length}</div></div>
+        <div><div class="stat-label">Quarterly Items</div><div style="font-size:22px;font-weight:800;color:var(--accent2)">${products.filter(p=>p.cycle==='quarterly').length}</div></div>
+        <div><div class="stat-label">Extra Buys</div><div style="font-size:22px;font-weight:800;color:var(--accent4)">${extraRate}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== MoM =====================
+function renderMoM() {
+  const cycle = state.settings.currentCycle;
+  const cycles = allCycles();
+  // Show last 6 months relative to current cycle
+  const [cy, cm] = cycle.split('-').map(Number);
+  const last6 = [];
+  for (let i = 0; i < 6; i++) {
+    let m = cm - i; let y = cy;
+    while (m <= 0) { m += 12; y--; }
+    last6.push(cycleKey(y, m));
+  }
+  const displayCycles = last6.filter(c => cycles.includes(c) || c === cycle).reverse();
+
+  const rows = displayCycles.map((c, idx) => {
+    const spend = cycleSpend(c);
+    const prev = idx > 0 ? cycleSpend(displayCycles[idx-1]) : null;
+    const diff = diffLabel(spend, prev);
+    const extras = state.purchases.filter(p => p.cycle === c && p.isExtra).length;
+    return { cycle: c, spend, diff, extras };
+  }).reverse();
+
+  const maxSpend = Math.max(...rows.map(r => r.spend), 1);
+
+  // Category breakdown across months
+  const catMoM = {};
+  CATEGORIES.forEach(cat => {
+    const vals = displayCycles.map(c => {
+      return state.purchases.filter(p => {
+        const prod = state.products.find(pr => pr.id === p.productId);
+        return p.cycle === c && (prod?.category || 'Other') === cat;
+      }).reduce((s, p) => s + p.price * p.qty, 0);
+    });
+    if (vals.some(v => v > 0)) catMoM[cat] = vals;
+  });
+
+  return `
+    <div class="card">
+      <div class="card-title">Month-over-Month Spend</div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">% change vs previous month. Red = higher spend, Green = lower.</p>
+      ${rows.length < 2 ? `<div style="color:var(--text2);font-size:13px;">Need at least 2 months of purchases to compare.</div>` : ''}
+      ${rows.map(r => {
+        const barPct = Math.round((r.spend / maxSpend) * 100);
+        return `<div class="analysis-row">
+          <div style="min-width:72px;font-family:var(--mono);font-size:12px;color:${r.cycle===cycle?'var(--accent)':'var(--text2)'}">${formatCycleLabel(r.cycle)}</div>
+          <div class="analysis-bar-wrap" style="flex:1"><div class="analysis-bar" style="width:${Math.max(barPct,2)}%;background:${r.cycle===cycle?'var(--accent)':'var(--text3)'}"></div></div>
+          <div style="font-family:var(--mono);font-size:12px;width:90px;text-align:right;">${formatMoney(r.spend)}</div>
+          <div style="font-family:var(--mono);font-size:12px;width:62px;text-align:right;color:${r.diff.color}">${r.diff.arrow} ${r.diff.text}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Category Spend MoM</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 4px;color:var(--text3);font-size:10px;letter-spacing:0.5px;">CATEGORY</th>
+              ${displayCycles.map(c => `<th style="text-align:right;padding:6px 4px;color:${c===cycle?'var(--accent)':'var(--text3)'};font-size:10px;white-space:nowrap;">${formatCycleLabel(c).split(' ')[0]}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(catMoM).map(([cat, vals]) => `
+              <tr>
+                <td style="padding:5px 4px;color:${CAT_COLORS[cat]||'var(--text2)'};white-space:nowrap;">${cat}</td>
+                ${vals.map((v, i) => {
+                  const prev = i > 0 ? vals[i-1] : null;
+                  const d = diffLabel(v, prev);
+                  const color = v === 0 ? 'var(--text3)' : (d.raw > 0 ? 'var(--accent3)' : d.raw < 0 ? 'var(--accent)' : 'var(--text)');
+                  return `<td style="text-align:right;padding:5px 4px;color:${color};">${v > 0 ? formatMoney(v) : '—'}</td>`;
+                }).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== QoQ =====================
+function renderQoQ() {
+  const cycle = state.settings.currentCycle;
+  const [cy, cm] = cycle.split('-').map(Number);
+
+  // Get last 6 quarters
+  const quarters = [];
+  for (let i = 0; i < 6; i++) {
+    // Quarter is defined by its first month
+    let baseM = Math.floor((cm - 1) / 3) * 3 + 1 - (i * 3);
+    let baseY = cy;
+    while (baseM <= 0) { baseM += 12; baseY--; }
+    const qKey = cycleKey(baseY, baseM);
+    const months = [0,1,2].map(offset => {
+      let m = baseM + offset; let y = baseY;
+      if (m > 12) { m -= 12; y++; }
+      return cycleKey(y, m);
+    });
+    const spend = months.reduce((s, c) => s + cycleSpend(c), 0);
+    const extras = state.purchases.filter(p => months.includes(p.cycle) && p.isExtra).length;
+    const label = `Q${Math.ceil(baseM/3)} ${baseY}`;
+    quarters.push({ label, months, spend, extras });
+  }
+  quarters.reverse();
+
+  const rows = quarters.map((q, idx) => {
+    const prev = idx > 0 ? quarters[idx-1].spend : null;
+    const diff = diffLabel(q.spend, prev);
+    return { ...q, diff };
+  });
+
+  const maxSpend = Math.max(...rows.map(r => r.spend), 1);
+
+  // Category QoQ
+  const catQoQ = {};
+  CATEGORIES.forEach(cat => {
+    const vals = quarters.map(q =>
+      state.purchases.filter(p => {
+        const prod = state.products.find(pr => pr.id === p.productId);
+        return q.months.includes(p.cycle) && (prod?.category||'Other') === cat;
+      }).reduce((s,p) => s + p.price*p.qty, 0)
+    );
+    if (vals.some(v => v > 0)) catQoQ[cat] = vals;
+  });
+
+  return `
+    <div class="card">
+      <div class="card-title">Quarter-over-Quarter Spend</div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:12px;">Each quarter = 3 months of combined spend.</p>
+      ${rows.every(r => r.spend === 0) ? `<div style="color:var(--text2);font-size:13px;">Need purchase data across quarters to compare.</div>` : ''}
+      ${rows.map(r => {
+        const barPct = Math.round((r.spend / maxSpend) * 100);
+        return `<div class="analysis-row">
+          <div style="min-width:68px;font-family:var(--mono);font-size:12px;color:var(--text2)">${r.label}</div>
+          <div class="analysis-bar-wrap" style="flex:1"><div class="analysis-bar" style="width:${Math.max(barPct,2)}%;background:var(--accent2)"></div></div>
+          <div style="font-family:var(--mono);font-size:12px;width:90px;text-align:right;">${formatMoney(r.spend)}</div>
+          <div style="font-family:var(--mono);font-size:12px;width:62px;text-align:right;color:${r.diff.color}">${r.diff.arrow} ${r.diff.text}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);width:40px;text-align:right">${r.extras}ex</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Category Spend QoQ</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 4px;color:var(--text3);font-size:10px;">CATEGORY</th>
+              ${quarters.map(q => `<th style="text-align:right;padding:6px 4px;color:var(--text3);font-size:10px;">${q.label}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(catQoQ).map(([cat, vals]) => `
+              <tr>
+                <td style="padding:5px 4px;color:${CAT_COLORS[cat]||'var(--text2)'};">${cat}</td>
+                ${vals.map((v, i) => {
+                  const prev = i > 0 ? vals[i-1] : null;
+                  const d = diffLabel(v, prev);
+                  const color = v === 0 ? 'var(--text3)' : (d.raw > 0 ? 'var(--accent3)' : d.raw < 0 ? 'var(--accent)' : 'var(--text)');
+                  return `<td style="text-align:right;padding:5px 4px;color:${color};">${v > 0 ? formatMoney(v) : '—'}</td>`;
+                }).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== YoY =====================
+function renderYoY() {
+  const cycle = state.settings.currentCycle;
+  const [cy] = cycle.split('-').map(Number);
+
+  const years = [];
+  for (let y = cy - 3; y <= cy; y++) {
+    const months = Array.from({length:12},(_,i) => cycleKey(y, i+1));
+    const spend = months.reduce((s, c) => s + cycleSpend(c), 0);
+    const extras = state.purchases.filter(p => months.includes(p.cycle) && p.isExtra).length;
+    years.push({ year: y, months, spend, extras });
+  }
+
+  const rows = years.map((yr, idx) => {
+    const prev = idx > 0 ? years[idx-1].spend : null;
+    return { ...yr, diff: diffLabel(yr.spend, prev) };
+  });
+
+  const maxSpend = Math.max(...rows.map(r => r.spend), 1);
+
+  // Same month YoY — compare current month to same month last year
+  const currentMonth = cycle.split('-')[1];
+  const sameMoComparison = [];
+  for (let y = cy - 3; y <= cy; y++) {
+    const c = cycleKey(y, parseInt(currentMonth));
+    sameMoComparison.push({ label: `${c}`, year: y, spend: cycleSpend(c) });
+  }
+
+  // Category YoY
+  const catYoY = {};
+  CATEGORIES.forEach(cat => {
+    const vals = years.map(yr =>
+      state.purchases.filter(p => {
+        const prod = state.products.find(pr => pr.id === p.productId);
+        return yr.months.includes(p.cycle) && (prod?.category||'Other') === cat;
+      }).reduce((s,p) => s + p.price*p.qty, 0)
+    );
+    if (vals.some(v => v > 0)) catYoY[cat] = vals;
+  });
+
+  return `
+    <div class="card">
+      <div class="card-title">Year-over-Year Total Spend</div>
+      ${rows.every(r => r.spend === 0) ? `<div style="color:var(--text2);font-size:13px;">Need purchase data across years to compare.</div>` : ''}
+      ${rows.map(r => {
+        const barPct = Math.round((r.spend / maxSpend) * 100);
+        return `<div class="analysis-row">
+          <div style="min-width:44px;font-family:var(--mono);font-size:13px;font-weight:700;color:${r.year===cy?'var(--accent4)':'var(--text2)'}">${r.year}</div>
+          <div class="analysis-bar-wrap" style="flex:1"><div class="analysis-bar" style="width:${Math.max(barPct,2)}%;background:${r.year===cy?'var(--accent4)':'var(--text3)'}"></div></div>
+          <div style="font-family:var(--mono);font-size:12px;width:90px;text-align:right;">${r.spend > 0 ? formatMoney(r.spend) : '—'}</div>
+          <div style="font-family:var(--mono);font-size:12px;width:62px;text-align:right;color:${r.diff.color}">${r.diff.arrow} ${r.diff.text}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Same Month YoY (${new Date(2000, parseInt(currentMonth)-1).toLocaleString('en',{month:'long'})})</div>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:10px;">Comparing ${new Date(2000, parseInt(currentMonth)-1).toLocaleString('en',{month:'long'})} spend across years.</p>
+      ${sameMoComparison.map((r, idx) => {
+        const prev = idx > 0 ? sameMoComparison[idx-1].spend : null;
+        const d = diffLabel(r.spend, prev);
+        const maxV = Math.max(...sameMoComparison.map(x=>x.spend),1);
+        return `<div class="analysis-row">
+          <div style="min-width:80px;font-family:var(--mono);font-size:12px;color:${r.year===cy?'var(--accent4)':'var(--text2)'}">${formatCycleLabel(r.label)}</div>
+          <div class="analysis-bar-wrap" style="flex:1"><div class="analysis-bar" style="width:${Math.max(Math.round(r.spend/maxV*100),2)}%;background:var(--accent4)"></div></div>
+          <div style="font-family:var(--mono);font-size:12px;width:90px;text-align:right;">${r.spend > 0 ? formatMoney(r.spend) : '—'}</div>
+          <div style="font-family:var(--mono);font-size:12px;width:62px;text-align:right;color:${d.color}">${d.arrow} ${d.text}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Category Spend YoY</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 4px;color:var(--text3);font-size:10px;">CATEGORY</th>
+              ${years.map(yr => `<th style="text-align:right;padding:6px 4px;color:${yr.year===cy?'var(--accent4)':'var(--text3)'};font-size:10px;">${yr.year}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(catYoY).map(([cat, vals]) => `
+              <tr>
+                <td style="padding:5px 4px;color:${CAT_COLORS[cat]||'var(--text2)'};">${cat}</td>
+                ${vals.map((v, i) => {
+                  const prev = i > 0 ? vals[i-1] : null;
+                  const d = diffLabel(v, prev);
+                  const color = v === 0 ? 'var(--text3)' : (d.raw > 0 ? 'var(--accent3)' : d.raw < 0 ? 'var(--accent)' : 'var(--text)');
+                  return `<td style="text-align:right;padding:5px 4px;color:${color};">${v > 0 ? formatMoney(v) : '—'}</td>`;
+                }).join('')}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ===================== PRICE TRACKER =====================
+function renderPriceTracker() {
+  const cycles = allCycles();
+  const products = state.products.filter(p => state.purchases.some(b => b.productId === p.id && b.price > 0));
+
+  // Build filter UI
+  const fromDefault = priceFromCycle || (cycles.length > 1 ? cycles[0] : '');
+  const toDefault = priceToCycle || (cycles.length > 0 ? cycles[cycles.length-1] : '');
+
+  // Filter purchases by date range
+  const inRange = (cycle) => {
+    if (!fromDefault || !toDefault) return true;
+    return cycle >= fromDefault && cycle <= toDefault;
+  };
+
+  // Per-product price history
+  const priceRows = products
+    .filter(p => !priceProductFilter || p.name.toLowerCase().includes(priceProductFilter.toLowerCase()) || p.category.toLowerCase().includes(priceProductFilter.toLowerCase()))
+    .map(p => {
+      const history = state.purchases
+        .filter(b => b.productId === p.id && b.price > 0 && inRange(b.cycle))
+        .sort((a,b) => a.cycle.localeCompare(b.cycle));
+      if (!history.length) return null;
+      const firstPrice = history[0].price;
+      const lastPrice = history[history.length-1].price;
+      const maxPrice = Math.max(...history.map(h=>h.price));
+      const minPrice = Math.min(...history.map(h=>h.price));
+      const diff = diffLabel(lastPrice, firstPrice);
+      return { p, history, firstPrice, lastPrice, maxPrice, minPrice, diff };
+    }).filter(Boolean);
+
+  // Overall price inflation: avg of all price changes
+  const inflations = priceRows.map(r => r.diff.raw).filter(v => v !== undefined && !isNaN(v));
+  const avgInflation = inflations.length ? inflations.reduce((s,v)=>s+v,0)/inflations.length : null;
+
+  return `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">Price Tracker — Custom Date Range</div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group">
+          <label>From Cycle</label>
+          <select id="pt-from" onchange="priceFromCycle=this.value;renderTab()">
+            <option value="">Earliest</option>
+            ${cycles.map(c => `<option value="${c}" ${c===fromDefault?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>To Cycle</label>
+          <select id="pt-to" onchange="priceToCycle=this.value;renderTab()">
+            <option value="">Latest</option>
+            ${cycles.map(c => `<option value="${c}" ${c===toDefault?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Filter by Product / Category</label>
+        <input type="text" value="${priceProductFilter}" placeholder="e.g. Rice, Proteins..." oninput="priceProductFilter=this.value;renderTab()">
+      </div>
+      ${avgInflation !== null ? `
+        <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;display:flex;gap:16px;align-items:center;">
+          <div>
+            <div class="stat-label">Avg Price Change</div>
+            <div style="font-size:22px;font-weight:800;color:${avgInflation>0?'var(--accent3)':'var(--accent)'}">${avgInflation>0?'+':''}${avgInflation.toFixed(1)}%</div>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">
+            Across <strong style="color:var(--text)">${priceRows.length}</strong> tracked products<br>
+            ${fromDefault && toDefault ? `${formatCycleLabel(fromDefault)} → ${formatCycleLabel(toDefault)}` : 'All time'}
+          </div>
+        </div>` : ''}
+    </div>
+
+    ${priceRows.length === 0 ? `
+      <div class="empty">
+        <div class="empty-icon">📊</div>
+        <h3>No price history yet</h3>
+        <p>Log purchases with prices to track price changes over time.</p>
+      </div>` : ''}
+
+    ${priceRows.map(({ p, history, firstPrice, lastPrice, maxPrice, minPrice, diff }) => {
+      const catColor = CAT_COLORS[p.category] || '#8b8fa0';
+      const maxVal = Math.max(...history.map(h=>h.price), 1);
+      return `
+        <div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div>
+              <div style="font-size:14px;font-weight:800;">${p.name}</div>
+              <div style="font-size:10px;color:${catColor};margin-top:2px;">${p.category}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent)">${formatMoney(lastPrice)}</div>
+              <div style="font-family:var(--mono);font-size:12px;color:${diff.color}">${diff.arrow} ${diff.text} vs first</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">First: <span style="color:var(--text)">${formatMoney(firstPrice)}</span></div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Latest: <span style="color:var(--accent)">${formatMoney(lastPrice)}</span></div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Min: <span style="color:var(--accent2)">${formatMoney(minPrice)}</span></div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Max: <span style="color:var(--accent3)">${formatMoney(maxPrice)}</span></div>
+          </div>
+          <div style="display:flex;gap:4px;align-items:flex-end;height:40px;">
+            ${history.map((h, i) => {
+              const ht = Math.max(8, Math.round((h.price/maxVal)*40));
+              const prev = i > 0 ? history[i-1].price : null;
+              const up = prev !== null && h.price > prev;
+              const down = prev !== null && h.price < prev;
+              const col = up ? 'var(--accent3)' : down ? 'var(--accent)' : 'var(--text3)';
+              return `<div title="${formatCycleLabel(h.cycle)}: ${formatMoney(h.price)}" style="flex:1;min-width:6px;height:${ht}px;background:${col};border-radius:3px 3px 0 0;cursor:default;"></div>`;
+            }).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${history.length > 0 ? formatCycleLabel(history[0].cycle) : ''}</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">${history.length > 0 ? formatCycleLabel(history[history.length-1].cycle) : ''}</span>
+          </div>
+          <div style="margin-top:8px;overflow-x:auto;">
+            <table style="width:100%;font-family:var(--mono);font-size:10px;border-collapse:collapse;">
+              ${history.map((h, i) => {
+                const prev = i > 0 ? history[i-1].price : null;
+                const d = diffLabel(h.price, prev);
+                return `<tr>
+                  <td style="padding:3px 4px;color:var(--text3)">${formatCycleLabel(h.cycle)}</td>
+                  <td style="padding:3px 4px;text-align:right;color:var(--text)">${formatMoney(h.price)}</td>
+                  <td style="padding:3px 4px;text-align:right;color:${d.color}">${d.arrow} ${d.text}</td>
+                  <td style="padding:3px 4px;color:var(--text3)">${h.store||'—'}</td>
+                </tr>`;
+              }).join('')}
+            </table>
+          </div>
+        </div>`;
+    }).join('')}
+  `;
+}
+
+// ===================== CSV =====================
+function renderCSV() {
+  return `
+    <div class="card-title" style="margin-bottom:14px;">CSV Import / Export</div>
+
+    <div class="info-box">
+      <strong>IMPORT FORMAT — Products:</strong><br>
+      name, category, unit, plannedQty, price, store, cycle, currentStock<br><br>
+      <strong>IMPORT FORMAT — Purchases:</strong><br>
+      productName, qty, price, store, date, isExtra, cycle<br><br>
+      <strong>Cycles:</strong> monthly | quarterly<br>
+      <strong>isExtra:</strong> true | false<br>
+      <strong>Categories:</strong> Proteins, Grains &amp; Carbs, Dairy &amp; Eggs, Fruits, Vegetables, Cleaning Supplies, etc.
+    </div>
+
+    <div class="card">
+      <div class="card-title">Import Products</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">CSV file with product list. Will merge with existing (match by name).</p>
+      <input type="file" accept=".csv" id="import-products-file" style="display:none" onchange="importProductsCSV(this)">
+      <button class="btn btn-primary" onclick="document.getElementById('import-products-file').click()">Choose Products CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Import Purchases</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">CSV file with purchase history.</p>
+      <input type="file" accept=".csv" id="import-purchases-file" style="display:none" onchange="importPurchasesCSV(this)">
+      <button class="btn btn-primary" onclick="document.getElementById('import-purchases-file').click()">Choose Purchases CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Export Data</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-teal" onclick="exportProducts()">Export Products</button>
+        <button class="btn btn-teal" onclick="exportPurchases()">Export Purchases</button>
+        <button class="btn btn-outline" onclick="exportAll()">Export Full Backup</button>
+      </div>
+    </div>
+
+    <div class="card" id="sheets-card">
+      <div class="card-title" style="color:var(--accent2)">Google Sheets Live Sync</div>
+      <div id="sheets-ui"></div>
+    </div>
+
+    <div class="card" style="border-color:var(--accent3)33;">
+      <div class="card-title" style="color:var(--accent3)">Danger Zone</div>
+      <button class="btn btn-danger btn-sm" onclick="clearAllData()">Clear All Data</button>
+    </div>
+  `;
+}
+
+// ===================== MODALS =====================
+function openModal(html) {
+  document.getElementById('modal-inner').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  renderTab();
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'modal-overlay') closeModal();
+});
+
+// ADD PRODUCT
+function openAddProduct() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Add Product</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Product Name *</label>
+        <input id="f-name" type="text" placeholder="e.g. Brown Rice">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="f-cat">
+            ${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Cycle</label>
+          <select id="f-cycle">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Planned Qty</label>
+          <input id="f-planned" type="number" placeholder="e.g. 2">
+        </div>
+        <div class="form-group">
+          <label>Unit</label>
+          <input id="f-unit" type="text" placeholder="e.g. kg, pcs, L">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Price per Unit</label>
+          <input id="f-price" type="number" step="0.01" placeholder="e.g. 3.50">
+        </div>
+        <div class="form-group">
+          <label>Current Stock</label>
+          <input id="f-stock" type="number" placeholder="e.g. 0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Store</label>
+        <select id="f-store">
+          <option value="">— Select Store —</option>
+          ${state.stores.map(s => `<option value="${s}">${s}</option>`).join('')}
+          <option value="__new">+ Add New Store</option>
+        </select>
+      </div>
+      <div class="form-group" id="new-store-wrap" style="display:none">
+        <label>New Store Name</label>
+        <input id="f-newstore" type="text" placeholder="Store name">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveProduct()">Save Product</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+  document.getElementById('f-store').addEventListener('change', function() {
+    document.getElementById('new-store-wrap').style.display = this.value === '__new' ? '' : 'none';
+  });
+}
+
+function saveProduct(id) {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { showToast('Product name required'); return; }
+
+  let store = document.getElementById('f-store').value;
+  if (store === '__new') {
+    store = document.getElementById('f-newstore').value.trim();
+    if (store && !state.stores.includes(store)) state.stores.push(store);
+  }
+
+  const product = {
+    id: id || 'p_' + Date.now(),
+    name,
+    category: document.getElementById('f-cat').value,
+    cycle: document.getElementById('f-cycle').value,
+    plannedQty: parseFloat(document.getElementById('f-planned').value) || 0,
+    unit: document.getElementById('f-unit').value.trim(),
+    price: parseFloat(document.getElementById('f-price').value) || 0,
+    currentStock: parseFloat(document.getElementById('f-stock').value) || 0,
+    store,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (id) {
+    const idx = state.products.findIndex(p => p.id === id);
+    if (idx !== -1) state.products[idx] = product;
+  } else {
+    state.products.push(product);
+  }
+
+  saveData();
+  showToast('Product saved!');
+  closeModal();
+}
+
+function openEditProduct(id) {
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Edit Product</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Product Name *</label>
+        <input id="f-name" type="text" value="${p.name}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="f-cat">${CATEGORIES.map(c => `<option value="${c}" ${p.category===c?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+        <div class="form-group">
+          <label>Cycle</label>
+          <select id="f-cycle">
+            <option value="monthly" ${p.cycle==='monthly'?'selected':''}>Monthly</option>
+            <option value="quarterly" ${p.cycle==='quarterly'?'selected':''}>Quarterly</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Planned Qty</label>
+          <input id="f-planned" type="number" value="${p.plannedQty||0}">
+        </div>
+        <div class="form-group">
+          <label>Unit</label>
+          <input id="f-unit" type="text" value="${p.unit||''}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Price per Unit</label>
+          <input id="f-price" type="number" step="0.01" value="${p.price||0}">
+        </div>
+        <div class="form-group">
+          <label>Current Stock</label>
+          <input id="f-stock" type="number" value="${p.currentStock||0}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Store</label>
+        <select id="f-store">
+          <option value="">— None —</option>
+          ${state.stores.map(s => `<option value="${s}" ${p.store===s?'selected':''}>${s}</option>`).join('')}
+          <option value="__new">+ Add New Store</option>
+        </select>
+      </div>
+      <div class="form-group" id="new-store-wrap" style="display:none">
+        <label>New Store Name</label>
+        <input id="f-newstore" type="text">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveProduct('${id}')">Update</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProduct('${id}')">Delete</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+  document.getElementById('f-store').addEventListener('change', function() {
+    document.getElementById('new-store-wrap').style.display = this.value === '__new' ? '' : 'none';
+  });
+}
+
+function deleteProduct(id) {
+  if (!confirm('Delete this product?')) return;
+  state.products = state.products.filter(p => p.id !== id);
+  saveData();
+  showToast('Product deleted');
+  closeModal();
+}
+
+// LOG PURCHASE
+function openLogPurchase() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Log Purchase</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Product</label>
+        <select id="fp-product" onchange="fillPurchaseDefaults(this.value)">
+          <option value="">— Select Product —</option>
+          ${state.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          <option value="__new">+ New (unplanned item)</option>
+        </select>
+      </div>
+      <div id="fp-newname-wrap" style="display:none" class="form-group">
+        <label>Item Name</label>
+        <input id="fp-newname" type="text" placeholder="Unplanned item name">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantity</label>
+          <input id="fp-qty" type="number" value="1" min="0.01" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Price per Unit ✏️ (edit if changed)</label>
+          <input id="fp-price" type="number" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div id="fp-lastprice-hint" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:-4px;"></div>
+      <div class="form-group">
+        <label>Store</label>
+        <select id="fp-store">
+          <option value="">— Select —</option>
+          ${state.stores.map(s => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input id="fp-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <input id="fp-cycle" type="text" value="${state.settings.currentCycle}" placeholder="YYYY-MM">
+      </div>
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
+        <input id="fp-extra" type="checkbox" style="width:auto">
+        <label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;">Mark as Extra (unplanned purchase)</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="savePurchase()">Log Purchase</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+  document.getElementById('fp-product').addEventListener('change', function() {
+    document.getElementById('fp-newname-wrap').style.display = this.value === '__new' ? '' : 'none';
+  });
+}
+
+function fillPurchaseDefaults(id) {
+  if (!id || id === '__new') {
+    document.getElementById('fp-newname-wrap').style.display = id === '__new' ? '' : 'none';
+    document.getElementById('fp-lastprice-hint').style.display = 'none';
+    return;
+  }
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+
+  // Find last actual purchase price
+  const lastBuy = state.purchases.filter(b => b.productId === id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+  const lastPrice = lastBuy ? lastBuy.price : p.price;
+  const lastStore = lastBuy ? lastBuy.store : p.store;
+  const lastDate = lastBuy ? lastBuy.date : null;
+
+  if (lastPrice) {
+    document.getElementById('fp-price').value = lastPrice;
+    const hint = document.getElementById('fp-lastprice-hint');
+    hint.style.display = '';
+    hint.innerHTML = `Last paid: <strong style="color:var(--accent)">${state.settings.currency}${parseFloat(lastPrice).toFixed(2)}</strong>${lastDate ? ` on ${lastDate}` : ''}${lastStore ? ` @ ${lastStore}` : ''} — <em style="color:var(--text2)">edit above if price changed</em>`;
+  }
+  if (lastStore && state.stores.includes(lastStore)) {
+    document.getElementById('fp-store').value = lastStore;
+  }
+}
+
+function savePurchase() {
+  const productId = document.getElementById('fp-product').value;
+  const qty = parseFloat(document.getElementById('fp-qty').value) || 1;
+  const price = parseFloat(document.getElementById('fp-price').value) || 0;
+  const store = document.getElementById('fp-store').value;
+  const date = document.getElementById('fp-date').value;
+  const cycle = document.getElementById('fp-cycle').value || state.settings.currentCycle;
+  const isExtra = document.getElementById('fp-extra').checked;
+
+  let productName = '';
+  let unit = '';
+
+  if (productId === '__new') {
+    productName = document.getElementById('fp-newname').value.trim();
+    if (!productName) { showToast('Please enter item name'); return; }
+  } else {
+    const p = state.products.find(pr => pr.id === productId);
+    if (!p) { showToast('Select a product'); return; }
+    productName = p.name;
+    unit = p.unit;
+    // Update stock and price on product
+    p.currentStock = (p.currentStock || 0) + qty;
+    if (store) p.store = store;
+    if (price && price !== p.price) {
+      p.price = price; // update default price to latest market price
+    }
+  }
+
+  const purchase = {
+    id: 'buy_' + Date.now(),
+    productId: productId === '__new' ? null : productId,
+    productName,
+    qty,
+    price,
+    store,
+    date,
+    cycle,
+    isExtra,
+    unit
+  };
+
+  state.purchases.push(purchase);
+
+  // Log it
+  state.monthEndLogs.push({
+    id: 'log_' + Date.now(),
+    cycle,
+    date,
+    type: isExtra ? 'extra' : 'purchase',
+    note: `${isExtra ? '⚠ Extra: ' : ''}${qty} ${unit} of ${productName} — ${state.settings.currency}${parseFloat(price).toFixed(2)}/unit — Total: ${state.settings.currency}${(price*qty).toFixed(2)} @ ${store || 'no store specified'}`
+  });
+
+  saveData();
+  showToast('Purchase logged!');
+  closeModal();
+}
+
+// MONTH-END WIZARD
+function openMonthEndWizard() {
+  const products = state.products;
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Month-End Close</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+      Record remaining stock for each item. This closes the cycle and prepares the next one.
+    </p>
+    <div id="me-products">
+      ${products.map(p => `
+        <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;">${p.name}</div>
+            <div style="font-size:11px;color:var(--text3);">${p.category} · planned: ${p.plannedQty} ${p.unit||''}</div>
+          </div>
+          <input type="number" step="0.01" min="0" value="${p.currentStock||0}" 
+            style="width:80px;text-align:center;"
+            onchange="updateMEStock('${p.id}', this.value)"
+            placeholder="${p.unit||''}">
+        </div>
+      `).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="completeME()">Close Cycle & Start Next</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+const meStockUpdates = {};
+function updateMEStock(id, val) {
+  meStockUpdates[id] = parseFloat(val) || 0;
+}
+
+function completeME() {
+  const cycle = state.settings.currentCycle;
+
+  // Apply stock updates
+  state.products.forEach(p => {
+    if (meStockUpdates[p.id] !== undefined) {
+      p.currentStock = meStockUpdates[p.id];
+    }
+  });
+
+  // Log
+  const stockouts = state.products.filter(p => (p.currentStock||0) === 0 && p.plannedQty > 0).length;
+  const overstocked = state.products.filter(p => (p.currentStock||0) > (p.plannedQty||0) * 1.5).length;
+
+  state.monthEndLogs.push({
+    id: 'log_' + Date.now(),
+    cycle,
+    date: new Date().toISOString().split('T')[0],
+    type: 'close',
+    note: `✓ Cycle ${formatCycleLabel(cycle)} closed. ${stockouts} stock-outs, ${overstocked} overstocked. Carry-overs applied.`
+  });
+
+  // Move to next cycle
+  const [y, m] = cycle.split('-').map(Number);
+  const next = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
+  state.settings.currentCycle = next;
+
+  saveData();
+  showToast(`Cycle closed! Now in ${formatCycleLabel(next)}`);
+  closeModal();
+}
+
+// ADD NOTE
+function openAddNote() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Add Note</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Note</label>
+        <textarea id="fn-note" placeholder="e.g. Bought extra rice due to sale..."></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveNote()">Save Note</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function saveNote() {
+  const note = document.getElementById('fn-note').value.trim();
+  if (!note) return;
+  state.monthEndLogs.push({
+    id: 'log_' + Date.now(),
+    cycle: state.settings.currentCycle,
+    date: new Date().toISOString().split('T')[0],
+    type: 'note',
+    note
+  });
+  saveData();
+  showToast('Note saved!');
+  closeModal();
+}
+
+// ===================== CSV FUNCTIONS =====================
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = [];
+    let cur = '', inQ = false;
+    for (const ch of line) {
+      if (ch === '"') inQ = !inQ;
+      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    vals.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    return obj;
+  });
+}
+
+function toCSV(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  rows.forEach(r => {
+    lines.push(headers.map(h => {
+      const v = String(r[h] || '');
+      return v.includes(',') ? `"${v}"` : v;
+    }).join(','));
+  });
+  return lines.join('\n');
+}
+
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function importProductsCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCSV(e.target.result);
+      let added = 0, updated = 0;
+      rows.forEach(row => {
+        const name = (row.name || row.Name || '').trim();
+        if (!name) return;
+        const existing = state.products.find(p => p.name.toLowerCase() === name.toLowerCase());
+        const product = {
+          id: existing?.id || 'p_' + Date.now() + Math.random(),
+          name,
+          category: row.category || row.Category || 'Other',
+          unit: row.unit || row.Unit || '',
+          plannedQty: parseFloat(row.plannedQty || row.planned_qty || 0),
+          price: parseFloat(row.price || row.Price || 0),
+          store: row.store || row.Store || '',
+          cycle: (row.cycle || row.Cycle || 'monthly').toLowerCase(),
+          currentStock: parseFloat(row.currentStock || row.current_stock || 0),
+          updatedAt: new Date().toISOString()
+        };
+        if (!state.stores.includes(product.store) && product.store) state.stores.push(product.store);
+        if (existing) { Object.assign(existing, product); updated++; }
+        else { state.products.push(product); added++; }
+      });
+      saveData();
+      showToast(`Imported: ${added} added, ${updated} updated`);
+      renderTab();
+    } catch(err) {
+      showToast('Import error: check CSV format');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function importPurchasesCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCSV(e.target.result);
+      let added = 0;
+      rows.forEach(row => {
+        const productName = (row.productName || row.product_name || row.name || '').trim();
+        if (!productName) return;
+        const product = state.products.find(p => p.name.toLowerCase() === productName.toLowerCase());
+        const purchase = {
+          id: 'buy_' + Date.now() + Math.random(),
+          productId: product?.id || null,
+          productName,
+          qty: parseFloat(row.qty || row.quantity || 1),
+          price: parseFloat(row.price || 0),
+          store: row.store || '',
+          date: row.date || new Date().toISOString().split('T')[0],
+          cycle: row.cycle || state.settings.currentCycle,
+          isExtra: (row.isExtra || row.is_extra || 'false').toLowerCase() === 'true',
+          unit: product?.unit || row.unit || ''
+        };
+        state.purchases.push(purchase);
+        if (product) product.currentStock = (product.currentStock || 0) + purchase.qty;
+        added++;
+      });
+      saveData();
+      showToast(`${added} purchases imported`);
+      renderTab();
+    } catch(err) {
+      showToast('Import error: check CSV format');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function exportProducts() {
+  const rows = state.products.map(p => ({
+    name: p.name,
+    category: p.category,
+    unit: p.unit,
+    plannedQty: p.plannedQty,
+    price: p.price,
+    store: p.store,
+    cycle: p.cycle,
+    currentStock: p.currentStock
+  }));
+  downloadCSV(toCSV(rows), `pantryos-products-${state.settings.currentCycle}.csv`);
+  showToast('Products exported!');
+}
+
+function exportPurchases() {
+  const rows = state.purchases.map(p => ({
+    productName: p.productName,
+    qty: p.qty,
+    price: p.price,
+    store: p.store,
+    date: p.date,
+    isExtra: p.isExtra,
+    cycle: p.cycle,
+    unit: p.unit
+  }));
+  downloadCSV(toCSV(rows), `pantryos-purchases-${state.settings.currentCycle}.csv`);
+  showToast('Purchases exported!');
+}
+
+function exportShoppingList() {
+  const cycle = state.settings.currentCycle;
+  const needed = state.products.filter(p => (p.currentStock||0) < (p.plannedQty||0));
+  const rows = needed.map(p => ({
+    name: p.name,
+    category: p.category,
+    needQty: (p.plannedQty||0) - (p.currentStock||0),
+    unit: p.unit,
+    price: p.price,
+    estimatedCost: (((p.plannedQty||0) - (p.currentStock||0)) * (p.price||0)).toFixed(2),
+    store: p.store,
+    cycle: p.cycle
+  }));
+  downloadCSV(toCSV(rows), `pantryos-shopping-list-${cycle}.csv`);
+  showToast('Shopping list exported!');
+}
+
+function exportAll() {
+  const backup = JSON.stringify(state, null, 2);
+  const blob = new Blob([backup], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pantryos-backup-${Date.now()}.json`;
+  a.click();
+  showToast('Full backup exported!');
+}
+
+function clearAllData() {
+  if (!confirm('This will delete ALL data. Are you sure?')) return;
+  state = getDefaultData();
+  saveData();
+  showToast('All data cleared');
+  renderTab();
+}
+
+// ===================== SETTINGS =====================
+const CURRENCIES = [
+  { symbol: '₦', name: 'Nigerian Naira (₦)' },
+  { symbol: '$', name: 'US Dollar ($)' },
+  { symbol: '£', name: 'British Pound (£)' },
+  { symbol: '€', name: 'Euro (€)' },
+  { symbol: 'GH₵', name: 'Ghanaian Cedi (GH₵)' },
+  { symbol: 'KSh', name: 'Kenyan Shilling (KSh)' },
+  { symbol: 'R', name: 'South African Rand (R)' },
+  { symbol: 'AED', name: 'UAE Dirham (AED)' },
+  { symbol: 'CAD$', name: 'Canadian Dollar (CAD$)' },
+  { symbol: 'A$', name: 'Australian Dollar (A$)' },
+];
+
+function renderSettings() {
+  return `
+    <div class="card-title" style="margin-bottom:14px;">Settings</div>
+
+    <div class="card">
+      <div class="card-title">Currency</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        Currently: <span style="color:var(--accent);font-family:var(--mono);font-size:16px;font-weight:700;">${state.settings.currency}</span>
+      </p>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Select Currency</label>
+        <select id="s-currency" onchange="previewCurrency(this.value)">
+          ${CURRENCIES.map(c => `<option value="${c.symbol}" ${state.settings.currency === c.symbol ? 'selected' : ''}>${c.name}</option>`).join('')}
+          <option value="__custom" ${!CURRENCIES.find(c => c.symbol === state.settings.currency) ? 'selected' : ''}>Custom symbol...</option>
+        </select>
+      </div>
+      <div class="form-group" id="custom-currency-wrap" style="display:${!CURRENCIES.find(c => c.symbol === state.settings.currency) ? '' : 'none'};margin-bottom:12px;">
+        <label>Custom Currency Symbol</label>
+        <input id="s-custom-currency" type="text" value="${state.settings.currency}" placeholder="e.g. ¥, CHF, etc." maxlength="6">
+      </div>
+      <button class="btn btn-primary" onclick="saveCurrency()">Apply Currency</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cycle Settings</div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>Current Cycle (YYYY-MM)</label>
+        <input id="s-cycle" type="text" value="${state.settings.currentCycle}" placeholder="YYYY-MM">
+      </div>
+      <button class="btn btn-outline" onclick="saveCycleSetting()">Update Cycle</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Stores</div>
+      <div id="stores-list" style="margin-bottom:12px;">
+        ${state.stores.map((s, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="flex:1;font-size:13px;font-weight:600;">${s}</div>
+            <button class="btn btn-outline btn-sm" onclick="removeStore(${i})">Remove</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input id="s-newstore" type="text" placeholder="New store name" style="flex:1">
+        <button class="btn btn-teal btn-sm" onclick="addStoreSetting()">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">About</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;">
+        <strong style="color:var(--text)">PantryOS</strong> — Grocery Planning & Tracking<br>
+        Version 1.0 · Data stored locally on your device<br>
+        Products: ${state.products.length} · Purchases: ${state.purchases.length}
+      </p>
+    </div>
+  `;
+}
+
+function previewCurrency(val) {
+  document.getElementById('custom-currency-wrap').style.display = val === '__custom' ? '' : 'none';
+}
+
+function saveCurrency() {
+  const sel = document.getElementById('s-currency').value;
+  let symbol = sel;
+  if (sel === '__custom') {
+    symbol = document.getElementById('s-custom-currency').value.trim();
+    if (!symbol) { showToast('Enter a currency symbol'); return; }
+  }
+  state.settings.currency = symbol;
+  saveData();
+  showToast(`Currency set to ${symbol}`);
+  renderTab();
+}
+
+function saveCycleSetting() {
+  const val = document.getElementById('s-cycle').value.trim();
+  if (!/^\d{4}-\d{2}$/.test(val)) { showToast('Format must be YYYY-MM'); return; }
+  state.settings.currentCycle = val;
+  saveData();
+  showToast('Cycle updated!');
+  renderTab();
+}
+
+function addStoreSetting() {
+  const name = document.getElementById('s-newstore').value.trim();
+  if (!name) return;
+  if (state.stores.includes(name)) { showToast('Store already exists'); return; }
+  state.stores.push(name);
+  saveData();
+  showToast('Store added!');
+  renderTab();
+}
+
+function removeStore(idx) {
+  state.stores.splice(idx, 1);
+  saveData();
+  renderTab();
+}
+// ===================== GOOGLE SHEETS SYNC =====================
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+let gapiReady = false;
+let tokenClient = null;
+let pendingAction = null;
+
+function renderSheetsUI() {
+  const el = document.getElementById('sheets-ui');
+  if (!el) return;
+  const connected = state.settings.sheetsConnected;
+  if (connected) {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;"></div>
+        <span style="font-size:12px;color:var(--accent);font-weight:700;">Connected</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px;word-break:break-all;">${state.settings.sheetId||'No Sheet ID'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button class="btn btn-primary" onclick="sheetsPushAll()">↑ Push to Sheets</button>
+        <button class="btn btn-teal" onclick="sheetsPullAll()">↓ Pull from Sheets</button>
+        <button class="btn btn-outline btn-sm" onclick="disconnectSheets()">Disconnect</button>
+      </div>
+      <div id="sync-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);">${state.settings.lastSync ? 'Last sync: '+state.settings.lastSync : 'Not synced yet'}</div>
+    `;
+  } else {
+    el.innerHTML = `
+      <p style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:14px;">
+        Connect to your Google Sheet for live two-way sync. Both you and your partner can edit the Sheet and pull changes back to the app.
+      </p>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Google OAuth Client ID</label>
+        <input id="g-clientid" type="text" placeholder="xxxx.apps.googleusercontent.com" value="${state.settings.gClientId||''}">
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Google Sheet ID</label>
+        <input id="g-sheetid" type="text" placeholder="From Sheet URL: /spreadsheets/d/SHEET_ID/edit" value="${state.settings.sheetId||''}">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="connectSheets()">Connect & Authorise</button>
+        <button class="btn btn-outline btn-sm" onclick="showSheetsSetupGuide()">📋 Setup Guide</button>
+      </div>
+    `;
+  }
+}
+
+function initSheetsUI() {
+  setTimeout(() => {
+    renderSheetsUI();
+    if (state.settings.gClientId && !gapiReady) loadGoogleAPIs();
+  }, 60);
+}
+
+function loadGoogleAPIs() {
+  if (!document.getElementById('gis-script')) {
+    const s = document.createElement('script');
+    s.id = 'gis-script';
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = () => {
+      if (state.settings.gClientId) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: state.settings.gClientId,
+          scope: SCOPES,
+          callback: onTokenResponse
+        });
+      }
+    };
+    document.head.appendChild(s);
+  }
+  if (!document.getElementById('gapi-script')) {
+    const s = document.createElement('script');
+    s.id = 'gapi-script';
+    s.src = 'https://apis.google.com/js/api.js';
+    s.onload = () => {
+      gapi.load('client', async () => {
+        await gapi.client.init({});
+        await gapi.client.load('https://sheets.googleapis.com/$discovery/rest?version=v4');
+        gapiReady = true;
+      });
+    };
+    document.head.appendChild(s);
+  }
+}
+
+function onTokenResponse(resp) {
+  if (resp.error) { showToast('Auth failed: ' + resp.error); return; }
+  gapi.client.setToken(resp);
+  state.settings.sheetsConnected = true;
+  saveData();
+  renderSheetsUI();
+  if (pendingAction === 'push') sheetsPushAll();
+  else if (pendingAction === 'pull') sheetsPullAll();
+  pendingAction = null;
+}
+
+function connectSheets() {
+  const clientId = document.getElementById('g-clientid').value.trim();
+  const sheetId = document.getElementById('g-sheetid').value.trim();
+  if (!clientId) { showToast('Enter your OAuth Client ID'); return; }
+  if (!sheetId) { showToast('Enter your Sheet ID'); return; }
+  state.settings.gClientId = clientId;
+  state.settings.sheetId = sheetId;
+  saveData();
+  loadGoogleAPIs();
+  setTimeout(() => {
+    if (typeof google === 'undefined' || !google.accounts) { showToast('Still loading, try again in 2s'); return; }
+    tokenClient = google.accounts.oauth2.initTokenClient({ client_id: clientId, scope: SCOPES, callback: onTokenResponse });
+    pendingAction = 'push';
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  }, 2000);
+  showToast('Loading Google APIs...');
+}
+
+function disconnectSheets() {
+  try {
+    const tok = gapi.client.getToken();
+    if (tok) { google.accounts.oauth2.revoke(tok.access_token, ()=>{}); gapi.client.setToken(null); }
+  } catch(e) {}
+  state.settings.sheetsConnected = false;
+  saveData();
+  renderSheetsUI();
+  showToast('Disconnected');
+}
+
+function ensureToken(action) {
+  if (!state.settings.gClientId) { showToast('Not connected. Go to CSV tab.'); return false; }
+  try {
+    const token = gapi.client.getToken();
+    if (!token) { pendingAction = action; tokenClient.requestAccessToken({ prompt: '' }); return false; }
+  } catch(e) { showToast('Auth error — reconnect in CSV tab'); return false; }
+  return true;
+}
+
+async function sheetsPushAll() {
+  if (!ensureToken('push')) return;
+  setSyncStatus('Pushing...');
+  try {
+    const sid = state.settings.sheetId;
+    await ensureSheetTabs(sid, ['Products','Purchases','MonthLogs']);
+
+    const prodRows = [['id','name','category','unit','plannedQty','price','store','cycle','currentStock','updatedAt']];
+    state.products.forEach(p => prodRows.push([p.id,p.name,p.category||'',p.unit||'',p.plannedQty||0,p.price||0,p.store||'',p.cycle||'monthly',p.currentStock||0,p.updatedAt||'']));
+
+    const buyRows = [['id','productId','productName','qty','price','store','date','cycle','isExtra','unit']];
+    state.purchases.forEach(p => buyRows.push([p.id,p.productId||'',p.productName||'',p.qty||0,p.price||0,p.store||'',p.date||'',p.cycle||'',p.isExtra?'TRUE':'FALSE',p.unit||'']));
+
+    const logRows = [['id','cycle','date','type','note']];
+    state.monthEndLogs.forEach(l => logRows.push([l.id,l.cycle||'',l.date||'',l.type||'',l.note||'']));
+
+    await gapi.client.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sid,
+      resource: {
+        valueInputOption: 'USER_ENTERED',
+        data: [
+          { range: 'Products!A1', values: prodRows },
+          { range: 'Purchases!A1', values: buyRows },
+          { range: 'MonthLogs!A1', values: logRows }
+        ]
+      }
+    });
+
+    const now = new Date().toLocaleString();
+    state.settings.lastSync = now;
+    saveData();
+    setSyncStatus('✓ Pushed at ' + now);
+    showToast('Pushed to Google Sheets!');
+  } catch(e) {
+    setSyncStatus('Push failed: ' + (e.result?.error?.message || e.message));
+    showToast('Push failed — see setup guide');
+    console.error(e);
+  }
+}
+
+async function sheetsPullAll() {
+  if (!ensureToken('pull')) return;
+  setSyncStatus('Pulling...');
+  try {
+    const sid = state.settings.sheetId;
+    const [prodResp, buyResp, logResp] = await Promise.all([
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: sid, range: 'Products!A1:Z5000' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: sid, range: 'Purchases!A1:Z10000' }),
+      gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: sid, range: 'MonthLogs!A1:Z2000' }).catch(()=>({result:{values:[]}}))
+    ]);
+
+    const parseSheet = (resp) => {
+      const rows = resp.result.values || [];
+      if (rows.length < 2) return [];
+      const headers = rows[0];
+      return rows.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((h,i) => obj[h] = row[i]||'');
+        return obj;
+      });
+    };
+
+    const products = parseSheet(prodResp).map(r => ({
+      id: r.id||'p_'+Date.now()+Math.random(), name: r.name||'',
+      category: r.category||'Other', unit: r.unit||'',
+      plannedQty: parseFloat(r.plannedQty)||0, price: parseFloat(r.price)||0,
+      store: r.store||'', cycle: r.cycle||'monthly',
+      currentStock: parseFloat(r.currentStock)||0, updatedAt: r.updatedAt||''
+    })).filter(p => p.name);
+
+    const purchases = parseSheet(buyResp).map(r => ({
+      id: r.id||'buy_'+Date.now()+Math.random(), productId: r.productId||null,
+      productName: r.productName||'', qty: parseFloat(r.qty)||0,
+      price: parseFloat(r.price)||0, store: r.store||'', date: r.date||'',
+      cycle: r.cycle||'', isExtra: r.isExtra==='TRUE', unit: r.unit||''
+    })).filter(p => p.productName);
+
+    const logs = parseSheet(logResp).map(r => ({
+      id: r.id||'log_'+Date.now()+Math.random(),
+      cycle: r.cycle||'', date: r.date||'', type: r.type||'note', note: r.note||''
+    }));
+
+    state.products = mergeById(state.products, products);
+    state.purchases = mergeById(state.purchases, purchases);
+    state.monthEndLogs = mergeById(state.monthEndLogs, logs);
+    products.forEach(p => { if (p.store && !state.stores.includes(p.store)) state.stores.push(p.store); });
+
+    const now = new Date().toLocaleString();
+    state.settings.lastSync = now;
+    saveData();
+    setSyncStatus('✓ Pulled at ' + now);
+    showToast('Pulled from Google Sheets!');
+    renderTab();
+  } catch(e) {
+    setSyncStatus('Pull failed: ' + (e.result?.error?.message || e.message));
+    showToast('Pull failed — see setup guide');
+    console.error(e);
+  }
+}
+
+function mergeById(local, remote) {
+  const map = {};
+  local.forEach(i => { if(i.id) map[i.id] = i; });
+  remote.forEach(i => { if(i.id) map[i.id] = i; });
+  return Object.values(map);
+}
+
+async function ensureSheetTabs(sid, names) {
+  const meta = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: sid });
+  const existing = (meta.result.sheets||[]).map(s => s.properties.title);
+  const toAdd = names.filter(n => !existing.includes(n));
+  if (!toAdd.length) return;
+  await gapi.client.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sid,
+    resource: { requests: toAdd.map(t => ({ addSheet: { properties: { title: t } } })) }
+  });
+}
+
+function setSyncStatus(msg) {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = msg;
+}
+
+function showSheetsSetupGuide() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Google Sheets Setup</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="font-size:13px;line-height:1.9;color:var(--text2);">
+      <div style="color:var(--accent);font-weight:700;margin-bottom:4px;">Step 1 — Create a Google Sheet</div>
+      <div style="margin-bottom:14px;">Go to <strong style="color:var(--text)">sheets.google.com</strong> → new blank sheet.<br>
+      Copy the Sheet ID from the URL:<br>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--accent2);background:var(--surface2);padding:3px 8px;border-radius:6px;display:inline-block;margin-top:4px;">
+        /spreadsheets/d/<strong style="color:var(--accent)">COPY_THIS_PART</strong>/edit</span></div>
+
+      <div style="color:var(--accent);font-weight:700;margin-bottom:4px;">Step 2 — Google Cloud Console</div>
+      <div style="margin-bottom:14px;">
+        1. Go to <strong style="color:var(--text)">console.cloud.google.com</strong> → New Project<br>
+        2. <strong style="color:var(--text)">APIs & Services → Enable APIs</strong> → enable <strong style="color:var(--text)">Google Sheets API</strong><br>
+        3. <strong style="color:var(--text)">Credentials → Create → OAuth Client ID</strong><br>
+        4. Type: <strong style="color:var(--text)">Web Application</strong><br>
+        5. Authorised JS Origins: add the URL where you open PantryOS<br>
+        &nbsp;&nbsp;&nbsp;(e.g. <span style="font-family:var(--mono);font-size:11px;color:var(--accent2);">file://</span> if opening locally)<br>
+        6. Copy the <strong style="color:var(--text)">Client ID</strong>
+      </div>
+
+      <div style="color:var(--accent);font-weight:700;margin-bottom:4px;">Step 3 — Paste into PantryOS</div>
+      <div style="margin-bottom:14px;">Paste Client ID + Sheet ID in the CSV tab → Connect → Authorise in the Google popup.</div>
+
+      <div style="color:var(--accent);font-weight:700;margin-bottom:4px;">Step 4 — Install Dashboard Script</div>
+      <div>In your Sheet: <strong style="color:var(--text)">Extensions → Apps Script</strong> → paste the <strong style="color:var(--text)">PantryOS-AppScript.gs</strong> code → Save → run <strong style="color:var(--accent)">setupDashboard()</strong>.<br>
+      This builds the formatted Dashboard tab with charts automatically.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal()">Got it</button>
+    </div>
+  `);
+}
+
+// Hook into renderCSV to init sheets UI after render
+const _baseRenderCSV = renderCSV;
+renderCSV = function() {
+  const html = _baseRenderCSV();
+  setTimeout(initSheetsUI, 80);
+  return html;
+};
+
+// ===================== TOAST =====================
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===================== INIT =====================
+renderTab();
+</script>
+</body>
+</html>
