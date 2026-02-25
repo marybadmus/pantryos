@@ -393,6 +393,7 @@ textarea { resize: vertical; min-height: 70px; }
   <button class="nav-btn" data-tab="shopping">🛒 Shop</button>
   <button class="nav-btn" data-tab="monthend">📅 Month</button>
   <button class="nav-btn" data-tab="analysis">📊 Analysis</button>
+  <button class="nav-btn" data-tab="recipes">🍲 Recipes</button>
   <button class="nav-btn" data-tab="importexport">📁 CSV</button>
   <button class="nav-btn" data-tab="settings">⚙️ Settings</button>
 </div>
@@ -413,18 +414,59 @@ textarea { resize: vertical; min-height: 70px; }
 
 <script>
 // ===================== DATA STORE =====================
-const STORAGE_KEY = 'pantryos_v1';
+const STORAGE_KEY = 'pantryos_v2';
+
+const DEFAULT_UNITS = [
+  // Nigerian dry measures
+  'Derica','Paint','Mudu','Debe',
+  // Packaged goods
+  'Carton','Pack','Roll','Sachet','Bottle','Bag','Tin','Crate',
+  // Standard measures
+  'kg','g','L','cl','ml',
+  // Loose / count
+  'Piece','Cup','Bunch','Wrap','Bundle','Dozen','Unit'
+];
+
+const PURCHASE_TYPES = ['monthly','quarterly','top-up'];
+
+function allUnits() { return [...DEFAULT_UNITS, ...(state.customUnits||[])]; }
+function allCategories() { return [...CATEGORIES, ...(state.customCategories||[])]; }
+function allStores() { return [...new Set([...state.stores, ...(state.customStores||[])])]; }
 
 function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    // Try new key first, then migrate from old key
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) raw = localStorage.getItem('pantryos_v1');
+    if (raw) {
+      const data = JSON.parse(raw);
+      // Ensure new fields exist
+      if (!data.customUnits) data.customUnits = [];
+      if (!data.customCategories) data.customCategories = [];
+      if (!data.customStores) data.customStores = [];
+      if (!data.stockSnapshots) data.stockSnapshots = [];
+      if (!data.settings.lastBackup) data.settings.lastBackup = null;
+      if (!data.settings.sheetsConnected) data.settings.sheetsConnected = false;
+      if (!data.settings.gClientId) data.settings.gClientId = '';
+      if (!data.settings.sheetId) data.settings.sheetId = '';
+      return data;
+    }
   } catch(e) {}
   return getDefaultData();
 }
 
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // Auto-backup to Drive on every save if connected
+  if (state.settings.sheetsConnected && typeof gapi !== 'undefined') {
+    try { driveBackupDebounced(); } catch(e) {}
+  }
+}
+
+let _driveBackupTimer = null;
+function driveBackupDebounced() {
+  clearTimeout(_driveBackupTimer);
+  _driveBackupTimer = setTimeout(driveBackup, 3000); // wait 3s after last save
 }
 
 function getDefaultData() {
@@ -432,10 +474,19 @@ function getDefaultData() {
     products: [],
     purchases: [],
     monthEndLogs: [],
-    stores: ['Walmart', 'Costco'],
+    stockSnapshots: [],
+    stores: ['Shoprite','Justrite','Mallam Market'],
+    customUnits: [],
+    customCategories: [],
+    customStores: [],
     settings: {
       currentCycle: getCurrentCycleKey(),
-      currency: '₦'
+      currency: '₦',
+      gClientId: '',
+      sheetId: '',
+      sheetsConnected: false,
+      lastSync: null,
+      lastBackup: null
     }
   };
 }
@@ -505,7 +556,8 @@ function renderTab() {
       case 'shopping': m.innerHTML = renderShopping(); break;
       case 'monthend': m.innerHTML = renderMonthEnd(); break;
       case 'analysis': m.innerHTML = renderAnalysis(); break;
-      case 'importexport': m.innerHTML = renderCSV(); break;
+      case 'importexport': m.innerHTML = renderCSV(); setTimeout(initSheetsUI, 80); break;
+      case 'recipes':     m.innerHTML = renderRecipes(); break;
       case 'settings': m.innerHTML = renderSettings(); break;
     }
   } catch(err) {
@@ -670,7 +722,10 @@ function renderInventory() {
   return `
     <div class="section-header">
       <div class="section-title">All Products (${state.products.length})</div>
-      <button class="btn btn-primary btn-sm" onclick="openAddProduct()">+ Add</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="openStockSnapshot()">📸 Snapshot</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddProduct()">+ Add</button>
+      </div>
     </div>
 
     <div class="search-wrap">
@@ -719,6 +774,7 @@ function renderProductCard(p) {
       <div class="product-stock">
         <div class="stock-bar-wrap"><div class="stock-bar" style="width:${pct}%;background:${barColor}"></div></div>
         <span class="stock-label">${stock}/${planned} ${p.unit||''}</span>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openUpdateStock('${p.id}')">Update</button>
       </div>
     </div>
   `;
@@ -726,14 +782,14 @@ function renderProductCard(p) {
 
 // ===================== SHOPPING =====================
 let shopChecked = {};
+let shopEdits = {}; // {productId: {qty, price, store}}
 
 function renderShopping() {
   const cycle = state.settings.currentCycle;
-  // Items with low stock
   const needed = state.products.filter(p => {
+    if (p._shopOverride) return true;
     const stock = p.currentStock || 0;
     const planned = p.plannedQty || 0;
-    // For quarterly items, only show in relevant months
     if (p.cycle === 'quarterly') {
       const month = parseInt(cycle.split('-')[1]);
       if (month !== 1 && month !== 4 && month !== 7 && month !== 10) return false;
@@ -741,62 +797,163 @@ function renderShopping() {
     return stock < planned;
   });
 
-  const extra = state.purchases.filter(p => (p.stockingCycle || p.cycle) === cycle && p.isExtra);
+  const topups = getCyclePurchases(cycle).filter(p => p.purchaseType === 'top-up');
+  const totalEst = needed.reduce((s, p) => {
+    const e = shopEdits[p.id] || {};
+    const qty = e.qty != null ? e.qty : Math.max(0, (p.plannedQty||0) - (p.currentStock||0));
+    const price = e.price != null ? e.price : (p.price || 0);
+    return s + qty * price;
+  }, 0);
 
   return `
     <div class="section-header">
       <div class="section-title">Shopping List — ${formatCycleLabel(cycle)}</div>
-      <button class="btn btn-outline btn-sm" onclick="openLogPurchase()">+ Log Buy</button>
+      <button class="btn btn-teal btn-sm" onclick="exportShoppingList()">Export</button>
     </div>
 
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="stat-label">Estimated Total</div>
+          <div style="font-size:22px;font-weight:800;color:var(--accent)">${formatMoney(totalEst)}</div>
+        </div>
+        <div>
+          <div class="stat-label">Items Needed</div>
+          <div style="font-size:22px;font-weight:800;color:var(--text)">${needed.length}</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openAddToShopList()">+ Add Item</button>
+      </div>
+    </div>
+
+    <div class="section-header"><div class="section-title">Need to Buy (${needed.length})</div></div>
     <div class="card">
-      <div class="card-title">Need to Buy (${needed.length} items)</div>
-    ${needed.length === 0 ? `<div style="color:var(--text2);font-size:13px;">✓ All stocked up!</div>` : ''}
+      ${needed.length === 0 ? '<div style="color:var(--accent);font-size:13px;">✓ All stocked up!</div>' : ''}
       ${needed.map(p => {
-        const need = (p.plannedQty||0) - (p.currentStock||0);
-        const checked = shopChecked[p.id];
-        // Find last purchase price for this product
-        const lastBuy = state.purchases.filter(b => b.productId === p.id).sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+        const e = shopEdits[p.id] || {};
+        const needQty = e.qty != null ? e.qty : Math.max(0, (p.plannedQty||0) - (p.currentStock||0));
+        const usePrice = e.price != null ? e.price : (p.price || 0);
+        const useStore = e.store != null ? e.store : (p.store || '');
+        const lastBuy = state.purchases.filter(b => b.productId === p.id).sort((a,b) => new Date(b.date)-new Date(a.date))[0];
         const lastPrice = lastBuy ? lastBuy.price : p.price;
-        const lastStore = lastBuy ? lastBuy.store : p.store;
-        const estCost = lastPrice ? (lastPrice * need).toFixed(2) : null;
+        const checked = shopChecked[p.id];
         return `
-          <div class="shop-item">
+        <div class="shop-item" style="flex-direction:column;align-items:flex-start;gap:6px;">
+          <div style="display:flex;align-items:center;gap:8px;width:100%;">
             <div class="shop-check ${checked?'checked':''}" onclick="shopChecked['${p.id}']=!shopChecked['${p.id}'];renderTab()"></div>
-            <div style="flex:1">
-              <div class="shop-name ${checked?'checked-text':''}">${p.name}</div>
-              <div style="display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;">
-                <span class="shop-store">Need: <strong style="color:var(--text)">${need} ${p.unit||''}</strong></span>
-                ${lastStore ? `<span class="shop-store">@ ${lastStore}</span>` : ''}
-                ${lastPrice ? `<span class="shop-store" style="color:var(--text2)">Last price: <strong style="color:var(--accent)">${state.settings.currency}${parseFloat(lastPrice).toFixed(2)}</strong></span>` : ''}
-                ${estCost ? `<span class="shop-store" style="color:var(--accent4)">Est: ${state.settings.currency}${estCost}</span>` : ''}
-              </div>
-            </div>
+            <div class="shop-name ${checked?'checked-text':''}" style="flex:1;">${p.name}</div>
             <span class="tag ${p.cycle==='monthly'?'tag-monthly':'tag-quarterly'}">${p.cycle}</span>
+            <button class="btn btn-danger btn-sm" onclick="removeFromShopList('${p.id}')">✕</button>
           </div>
-        `;
+          ${lastPrice ? `<div style="font-family:var(--mono);font-size:10px;color:var(--text3);padding-left:28px;">Last paid: <strong style="color:var(--text2)">${formatMoney(lastPrice)}</strong></div>` : ''}
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-left:28px;width:100%;">
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;">Qty (${p.unit||'unit'})</div>
+              <input type="number" step="0.01" value="${needQty}" style="padding:5px 8px;font-size:12px;width:100%;"
+                onchange="if(!shopEdits['${p.id}'])shopEdits['${p.id}']={};shopEdits['${p.id}'].qty=parseFloat(this.value)||0;renderTab()">
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;">Price/Unit</div>
+              <input type="number" step="0.01" value="${usePrice||''}" placeholder="₦" style="padding:5px 8px;font-size:12px;width:100%;"
+                onchange="if(!shopEdits['${p.id}'])shopEdits['${p.id}']={};shopEdits['${p.id}'].price=parseFloat(this.value)||0;renderTab()">
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.5px;">Store</div>
+              <select style="padding:5px 6px;font-size:11px;width:100%;"
+                onchange="if(!shopEdits['${p.id}'])shopEdits['${p.id}']={};shopEdits['${p.id}'].store=this.value">
+                <option value="">—</option>
+                ${allStores().map(s => `<option value="${s}" ${s===useStore?'selected':''}>${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          ${usePrice && needQty ? `<div style="font-family:var(--mono);font-size:11px;color:var(--accent);padding-left:28px;">Est: ${formatMoney(usePrice*needQty)}</div>` : ''}
+        </div>`;
       }).join('')}
     </div>
 
-    ${extra.length > 0 ? `
-    <div class="card" style="border-color:#2d2010;">
-      <div class="card-title" style="color:var(--accent4)">Extra Purchases This Cycle</div>
-      ${extra.map(p => `
-        <div class="shop-item">
-          <div style="flex:1">
-            <div class="shop-name">${p.productName}</div>
-            <div class="shop-store">${p.qty} ${p.unit||''} × ${state.settings.currency}${p.price} @ ${p.store||'—'}</div>
-          </div>
-          <span style="color:var(--accent4);font-family:var(--mono);font-size:12px;">${state.settings.currency}${(p.price * p.qty).toFixed(2)}</span>
-        </div>
-      `).join('')}
+    ${topups.length > 0 ? `
+    <div class="section-header" style="margin-top:4px;"><div class="section-title" style="color:var(--accent4);">⚡ Top-Ups This Cycle (${topups.length})</div></div>
+    <div class="card" style="border-color:#2d1a0e;">
+      ${topups.map(p => `<div class="log-item">
+        <div class="log-dot" style="background:var(--accent4)"></div>
+        <div class="log-text">${p.productName} — ${p.qty} ${p.unit||''} · ${formatMoney(p.price*p.qty)} @ ${p.store||'—'}</div>
+      </div>`).join('')}
     </div>` : ''}
 
-    <div style="display:flex;gap:10px;margin-top:8px;">
-      <button class="btn btn-primary" style="flex:1" onclick="openLogPurchase()">Log Purchase</button>
-      <button class="btn btn-teal" style="flex:1" onclick="exportShoppingList()">Export List</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-primary" style="flex:1" onclick="buyAllChecked()">✓ Log All Checked</button>
+      <button class="btn btn-outline" style="flex:1" onclick="openLogPurchase()">Log Single</button>
     </div>
   `;
+}
+
+function removeFromShopList(productId) {
+  shopChecked[productId] = false;
+  delete shopEdits[productId];
+  const prod = state.products.find(p => p.id === productId);
+  if (prod) prod._shopOverride = false;
+  renderTab();
+}
+
+function openAddToShopList() {
+  openModal(`
+  <div class="modal-header"><div class="modal-title">Add to Shopping List</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  <div class="form-grid">
+    <div class="form-group"><label>Product</label>
+      <select id="asl-product">
+        <option value="">— Select —</option>
+        ${state.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Qty to Buy</label><input id="asl-qty" type="number" value="1" step="0.01"></div>
+      <div class="form-group"><label>Price/Unit</label><input id="asl-price" type="number" step="0.01" placeholder="0.00"></div>
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-primary" style="flex:1" onclick="confirmAddToShopList()">Add to List</button>
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+  </div>`);
+}
+
+function confirmAddToShopList() {
+  const pid = document.getElementById('asl-product').value;
+  if (!pid) { showToast('Select a product'); return; }
+  const qty = parseFloat(document.getElementById('asl-qty').value) || 1;
+  const price = parseFloat(document.getElementById('asl-price').value) || 0;
+  if (!shopEdits[pid]) shopEdits[pid] = {};
+  shopEdits[pid].qty = qty;
+  if (price) shopEdits[pid].price = price;
+  const prod = state.products.find(p => p.id === pid);
+  if (prod) prod._shopOverride = true;
+  showToast('Added to shopping list!');
+  closeModal();
+}
+
+function buyAllChecked() {
+  const cycle = state.settings.currentCycle;
+  const checked = state.products.filter(p => shopChecked[p.id]);
+  if (checked.length === 0) { showToast('Check items you bought first'); return; }
+  checked.forEach(p => {
+    const e = shopEdits[p.id] || {};
+    const qty = e.qty != null ? e.qty : Math.max(0, (p.plannedQty||0)-(p.currentStock||0));
+    const price = e.price != null ? e.price : (p.price || 0);
+    const store = e.store || p.store || '';
+    p.currentStock = (p.currentStock||0) + qty;
+    if (price && price !== p.price) p.price = price;
+    if (store) p.store = store;
+    if (p._shopOverride) delete p._shopOverride;
+    state.purchases.push({
+      id:'buy_'+Date.now()+'_'+Math.random(), productId:p.id, productName:p.name,
+      qty, price, store, date:new Date().toISOString().split('T')[0],
+      purchaseCycle:cycle, stockingCycle:cycle, cycle,
+      purchaseType:'monthly', isExtra:false, unit:p.unit||''
+    });
+    delete shopChecked[p.id];
+    delete shopEdits[p.id];
+  });
+  saveData();
+  showToast(`${checked.length} item${checked.length>1?'s':''} logged!`);
+  renderTab();
 }
 
 // ===================== MONTH-END =====================
@@ -1523,6 +1680,68 @@ document.addEventListener('click', e => {
   if (e.target.id === 'modal-overlay') closeModal();
 });
 
+// ===================== PRODUCT FORM HELPER =====================
+function productFormFields(p) {
+  const cats = allCategories();
+  const units = allUnits();
+  const stores = allStores();
+  return `
+    <div class="form-group">
+      <label>Product Name *</label>
+      <input id="f-name" type="text" value="${p ? p.name : ''}" placeholder="e.g. Brown Rice">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Category</label>
+        <select id="f-cat">
+          ${cats.map(c => `<option value="${c}" ${p?.category===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cycle</label>
+        <select id="f-cycle">
+          <option value="monthly" ${(!p || p?.cycle==='monthly') ? 'selected' : ''}>Monthly</option>
+          <option value="quarterly" ${p?.cycle==='quarterly' ? 'selected' : ''}>Quarterly</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Planned Qty</label>
+        <input id="f-planned" type="number" value="${p?.plannedQty||0}" step="0.01" placeholder="e.g. 2">
+      </div>
+      <div class="form-group">
+        <label>Unit</label>
+        <select id="f-unit">
+          ${units.map(u => `<option value="${u}" ${p?.unit===u?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Price per Unit</label>
+        <input id="f-price" type="number" step="0.01" value="${p?.price||''}" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label>Current Stock</label>
+        <input id="f-stock" type="number" value="${p?.currentStock||0}" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Preferred Store</label>
+      <select id="f-store">
+        <option value="">— None —</option>
+        ${stores.map(s => `<option value="${s}" ${p?.store===s?'selected':''}>${s}</option>`).join('')}
+        <option value="__new">+ Add New Store</option>
+      </select>
+    </div>
+    <div class="form-group" id="new-store-wrap" style="display:none">
+      <label>New Store Name</label>
+      <input id="f-newstore" type="text" placeholder="Store name">
+    </div>
+  `;
+}
+
 // ADD PRODUCT
 function openAddProduct() {
   openModal(`
@@ -1530,59 +1749,7 @@ function openAddProduct() {
       <div class="modal-title">Add Product</div>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Product Name *</label>
-        <input id="f-name" type="text" placeholder="e.g. Brown Rice">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Category</label>
-          <select id="f-cat">
-            ${CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Cycle</label>
-          <select id="f-cycle">
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Planned Qty</label>
-          <input id="f-planned" type="number" placeholder="e.g. 2">
-        </div>
-        <div class="form-group">
-          <label>Unit</label>
-          <input id="f-unit" type="text" placeholder="e.g. kg, pcs, L">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Price per Unit</label>
-          <input id="f-price" type="number" step="0.01" placeholder="e.g. 3.50">
-        </div>
-        <div class="form-group">
-          <label>Current Stock</label>
-          <input id="f-stock" type="number" placeholder="e.g. 0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Store</label>
-        <select id="f-store">
-          <option value="">— Select Store —</option>
-          ${state.stores.map(s => `<option value="${s}">${s}</option>`).join('')}
-          <option value="__new">+ Add New Store</option>
-        </select>
-      </div>
-      <div class="form-group" id="new-store-wrap" style="display:none">
-        <label>New Store Name</label>
-        <input id="f-newstore" type="text" placeholder="Store name">
-      </div>
-    </div>
+    <div class="form-grid">${productFormFields(null)}</div>
     <div class="modal-actions">
       <button class="btn btn-primary" style="flex:1" onclick="saveProduct()">Save Product</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -1609,7 +1776,7 @@ function saveProduct(id) {
     category: document.getElementById('f-cat').value,
     cycle: document.getElementById('f-cycle').value,
     plannedQty: parseFloat(document.getElementById('f-planned').value) || 0,
-    unit: document.getElementById('f-unit').value.trim(),
+    unit: document.getElementById('f-unit').value,
     price: parseFloat(document.getElementById('f-price').value) || 0,
     currentStock: parseFloat(document.getElementById('f-stock').value) || 0,
     store,
@@ -1636,56 +1803,9 @@ function openEditProduct(id) {
       <div class="modal-title">Edit Product</div>
       <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Product Name *</label>
-        <input id="f-name" type="text" value="${p.name}">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Category</label>
-          <select id="f-cat">${CATEGORIES.map(c => `<option value="${c}" ${p.category===c?'selected':''}>${c}</option>`).join('')}</select>
-        </div>
-        <div class="form-group">
-          <label>Cycle</label>
-          <select id="f-cycle">
-            <option value="monthly" ${p.cycle==='monthly'?'selected':''}>Monthly</option>
-            <option value="quarterly" ${p.cycle==='quarterly'?'selected':''}>Quarterly</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Planned Qty</label>
-          <input id="f-planned" type="number" value="${p.plannedQty||0}">
-        </div>
-        <div class="form-group">
-          <label>Unit</label>
-          <input id="f-unit" type="text" value="${p.unit||''}">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Price per Unit</label>
-          <input id="f-price" type="number" step="0.01" value="${p.price||0}">
-        </div>
-        <div class="form-group">
-          <label>Current Stock</label>
-          <input id="f-stock" type="number" value="${p.currentStock||0}">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Store</label>
-        <select id="f-store">
-          <option value="">— None —</option>
-          ${state.stores.map(s => `<option value="${s}" ${p.store===s?'selected':''}>${s}</option>`).join('')}
-          <option value="__new">+ Add New Store</option>
-        </select>
-      </div>
-      <div class="form-group" id="new-store-wrap" style="display:none">
-        <label>New Store Name</label>
-        <input id="f-newstore" type="text">
-      </div>
+    <div class="form-grid">${productFormFields(p)}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" style="flex:1" onclick="openUpdateStock('${id}')">📊 Update Stock Only</button>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" style="flex:1" onclick="saveProduct('${id}')">Update</button>
@@ -1703,6 +1823,68 @@ function deleteProduct(id) {
   state.products = state.products.filter(p => p.id !== id);
   saveData();
   showToast('Product deleted');
+  closeModal();
+}
+
+// UPDATE STOCK ANYTIME
+function openUpdateStock(id) {
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Update Stock</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="font-size:14px;font-weight:800;margin-bottom:14px;">${p.name}</div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-bottom:14px;">
+      Current stock: <strong style="color:var(--accent)">${p.currentStock||0} ${p.unit||'units'}</strong>
+      &nbsp;·&nbsp; Planned: ${p.plannedQty||0} ${p.unit||'units'}
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Update Type</label>
+        <select id="us-type">
+          <option value="set">Set to exact value</option>
+          <option value="add">Add to current stock</option>
+          <option value="subtract">Subtract from current stock</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Value (${p.unit||'units'})</label>
+        <input id="us-val" type="number" value="${p.currentStock||0}" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>Reason / Note (optional)</label>
+        <input id="us-note" type="text" placeholder="e.g. manual count, spillage, used some...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveUpdateStock('${id}')">Update Stock</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function saveUpdateStock(id) {
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+  const type = document.getElementById('us-type').value;
+  const val = parseFloat(document.getElementById('us-val').value) || 0;
+  const note = document.getElementById('us-note').value.trim();
+  const oldStock = p.currentStock || 0;
+  if (type === 'set') p.currentStock = val;
+  else if (type === 'add') p.currentStock = oldStock + val;
+  else p.currentStock = Math.max(0, oldStock - val);
+
+  state.monthEndLogs.push({
+    id: 'log_' + Date.now(),
+    cycle: state.settings.currentCycle,
+    date: new Date().toISOString().split('T')[0],
+    type: 'stock-update',
+    note: `Stock update: ${p.name} → ${oldStock} → ${p.currentStock} ${p.unit||''}${note ? ' (' + note + ')' : ''}`
+  });
+  saveData();
+  showToast('Stock updated!');
   closeModal();
 }
 
@@ -1751,12 +1933,22 @@ function openLogPurchase(prefillDate) {
       </div>
       <div id="fp-lastprice-hint" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:-4px;"></div>
 
-      <div class="form-group">
-        <label>Store</label>
-        <select id="fp-store">
-          <option value="">— Select —</option>
-          ${state.stores.map(s => `<option value="${s}">${s}</option>`).join('')}
-        </select>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Store</label>
+          <select id="fp-store">
+            <option value="">— Select —</option>
+            ${allStores().map(s => `<option value="${s}">${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Purchase Type ★</label>
+          <select id="fp-ptype">
+            <option value="monthly">Monthly (planned)</option>
+            <option value="quarterly">Quarterly (planned)</option>
+            <option value="top-up">Top-Up (mid-cycle restock)</option>
+          </select>
+        </div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;">
@@ -1884,7 +2076,8 @@ function savePurchase() {
   const purchaseCycle = document.getElementById('fp-purchase-cycle')?.value || dateTocycle(date);
   const stockingCycle = document.getElementById('fp-stocking-cycle')?.value || state.settings.currentCycle;
   const stockingQuarter = document.getElementById('fp-stocking-quarter')?.value || null;
-  const isExtra = document.getElementById('fp-extra').checked;
+  const purchaseType = document.getElementById('fp-ptype')?.value || 'monthly';
+  const isExtra = purchaseType === 'top-up' || document.getElementById('fp-extra')?.checked;
 
   let productName = '';
   let unit = '';
@@ -1899,7 +2092,6 @@ function savePurchase() {
     productName = p.name;
     unit = p.unit;
     productCycleType = p.cycle || 'monthly';
-    // Stock goes up when you log a purchase — uses stockingCycle for inventory health
     p.currentStock = (p.currentStock || 0) + qty;
     if (store) p.store = store;
     if (price && price !== p.price) p.price = price;
@@ -1908,31 +2100,23 @@ function savePurchase() {
   const purchase = {
     id: 'buy_' + Date.now(),
     productId: productId === '__new' ? null : productId,
-    productName,
-    qty,
-    price,
-    store,
-    date,
-    // purchaseCycle = spend tracking, price history, MoM/QoQ/YoY spend reports
-    purchaseCycle,
-    // cycle kept for backwards compat = same as purchaseCycle
-    cycle: purchaseCycle,
-    // stockingCycle = inventory health, stock-out/overstock, shopping list
+    productName, qty, price, store, date,
+    purchaseCycle, cycle: purchaseCycle,
     stockingCycle,
     stockingQuarter: productCycleType === 'quarterly' ? (stockingQuarter || quarterOf(stockingCycle)) : null,
+    purchaseType,
     isExtra,
     unit
   };
 
   state.purchases.push(purchase);
 
+  const typeLabel = purchaseType === 'top-up' ? '⚡ Top-up' : purchaseType === 'quarterly' ? '📦 Quarterly' : '🛒 Monthly';
   state.monthEndLogs.push({
     id: 'log_' + Date.now(),
-    cycle: stockingCycle,
-    purchaseCycle,
-    date,
-    type: isExtra ? 'extra' : 'purchase',
-    note: `${isExtra ? '⚠ Extra: ' : ''}${qty} ${unit} of ${productName} — ${state.settings.currency}${parseFloat(price).toFixed(2)}/unit — Total: ${state.settings.currency}${(price*qty).toFixed(2)} @ ${store || 'no store'} [bought: ${formatCycleLabel(purchaseCycle)}, for: ${formatCycleLabel(stockingCycle)}${stockingQuarter ? ' / '+stockingQuarter : ''}]`
+    cycle: stockingCycle, purchaseCycle, date,
+    type: purchaseType,
+    note: `${typeLabel}: ${qty} ${unit} of ${productName} — ${state.settings.currency}${parseFloat(price).toFixed(2)}/unit · Total: ${state.settings.currency}${(price*qty).toFixed(2)} @ ${store || '—'} [bought: ${formatCycleLabel(purchaseCycle)}, for: ${formatCycleLabel(stockingCycle)}${stockingQuarter ? ' / '+stockingQuarter : ''}]`
   });
 
   saveData();
@@ -2437,12 +2621,41 @@ function renderSettings() {
     </div>
 
     <div class="card">
-      <div class="card-title">About</div>
+      <div class="card-title">About & Backup Status</div>
       <p style="font-size:13px;color:var(--text2);line-height:1.7;">
-        <strong style="color:var(--text)">PantryOS</strong> — Grocery Planning & Tracking<br>
-        Version 1.0 · Data stored locally on your device<br>
-        Products: ${state.products.length} · Purchases: ${state.purchases.length}
+        <strong style="color:var(--text)">PantryOS</strong> — Nigerian Grocery Planning & Tracking<br>
+        Products: ${state.products.length} · Purchases: ${state.purchases.length} · Snapshots: ${(state.stockSnapshots||[]).length}<br>
+        <span style="color:var(--accent2)">Drive Backup: ${state.settings.lastBackup||'Not backed up yet'}</span><br>
+        <span style="color:var(--text3);font-size:11px;">Auto-backs up to Google Drive on every save when connected</span>
       </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Custom Units</div>
+      <p style="font-size:11px;color:var(--text2);margin-bottom:10px;">Default units: Derica, Paint, Mudu, Carton, Pack, kg, g, L, Piece, Cup, Bunch… Add your own below.</p>
+      ${(state.customUnits||[]).map((u,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;font-size:12px;font-weight:600;">${u}</div>
+        <button class="btn btn-outline btn-sm" onclick="removeCustomUnit(${i})">Remove</button>
+      </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input id="s-newunit" type="text" placeholder="e.g. Tumbler, Satchet, Wrap..." style="flex:1;">
+        <button class="btn btn-teal btn-sm" onclick="addCustomUnit()">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Custom Categories</div>
+      <p style="font-size:11px;color:var(--text2);margin-bottom:10px;">Add categories beyond the default list.</p>
+      ${(state.customCategories||[]).map((c,i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;font-size:12px;font-weight:600;">${c}</div>
+        <button class="btn btn-outline btn-sm" onclick="removeCustomCategory(${i})">Remove</button>
+      </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input id="s-newcat" type="text" placeholder="e.g. Traditional Spices, Local Staples..." style="flex:1;">
+        <button class="btn btn-teal btn-sm" onclick="addCustomCategory()">Add</button>
+      </div>
     </div>
   `;
 }
@@ -2489,7 +2702,6 @@ function removeStore(idx) {
   renderTab();
 }
 // ===================== GOOGLE SHEETS SYNC =====================
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 let gapiReady = false;
 let tokenClient = null;
 let pendingAction = null;
@@ -2625,16 +2837,33 @@ async function sheetsPushAll() {
   setSyncStatus('Pushing...');
   try {
     const sid = state.settings.sheetId;
-    await ensureSheetTabs(sid, ['Products','Purchases','MonthLogs']);
+    await ensureSheetTabs(sid, ['Products','Purchases','MonthLogs','_Validation']);
 
+    // Products
     const prodRows = [['id','name','category','unit','plannedQty','price','store','cycle','currentStock','updatedAt']];
     state.products.forEach(p => prodRows.push([p.id,p.name,p.category||'',p.unit||'',p.plannedQty||0,p.price||0,p.store||'',p.cycle||'monthly',p.currentStock||0,p.updatedAt||'']));
 
-    const buyRows = [['id','productId','productName','qty','price','store','date','cycle','isExtra','unit']];
-    state.purchases.forEach(p => buyRows.push([p.id,p.productId||'',p.productName||'',p.qty||0,p.price||0,p.store||'',p.date||'',p.cycle||'',p.isExtra?'TRUE':'FALSE',p.unit||'']));
+    // Purchases (with new fields)
+    const buyRows = [['id','productId','productName','qty','price','store','date','purchaseCycle','stockingCycle','purchaseType','isExtra','unit','stockingQuarter']];
+    state.purchases.forEach(p => buyRows.push([p.id,p.productId||'',p.productName||'',p.qty||0,p.price||0,p.store||'',p.date||'',p.purchaseCycle||p.cycle||'',p.stockingCycle||p.cycle||'',p.purchaseType||'monthly',p.isExtra?'TRUE':'FALSE',p.unit||'',p.stockingQuarter||'']));
 
+    // Logs
     const logRows = [['id','cycle','date','type','note']];
     state.monthEndLogs.forEach(l => logRows.push([l.id,l.cycle||'',l.date||'',l.type||'',l.note||'']));
+
+    // Validation lists (for Sheets dropdown validation)
+    const maxLen = Math.max(allCategories().length, allUnits().length, allStores().length, state.products.length, PURCHASE_TYPES.length);
+    const valRows = [['Products','Categories','Units','Stores','PurchaseTypes','Cycles']];
+    for (let i=0; i<maxLen; i++) {
+      valRows.push([
+        state.products[i]?.name||'',
+        allCategories()[i]||'',
+        allUnits()[i]||'',
+        allStores()[i]||'',
+        PURCHASE_TYPES[i]||'',
+        allCycleKeys()[i]||''
+      ]);
+    }
 
     await gapi.client.sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: sid,
@@ -2643,7 +2872,8 @@ async function sheetsPushAll() {
         data: [
           { range: 'Products!A1', values: prodRows },
           { range: 'Purchases!A1', values: buyRows },
-          { range: 'MonthLogs!A1', values: logRows }
+          { range: 'MonthLogs!A1', values: logRows },
+          { range: '_Validation!A1', values: valRows }
         ]
       }
     });
@@ -2694,7 +2924,12 @@ async function sheetsPullAll() {
       id: r.id||'buy_'+Date.now()+Math.random(), productId: r.productId||null,
       productName: r.productName||'', qty: parseFloat(r.qty)||0,
       price: parseFloat(r.price)||0, store: r.store||'', date: r.date||'',
-      cycle: r.cycle||'', isExtra: r.isExtra==='TRUE', unit: r.unit||''
+      purchaseCycle: r.purchaseCycle||r.cycle||'',
+      stockingCycle: r.stockingCycle||r.cycle||'',
+      cycle: r.purchaseCycle||r.cycle||'',
+      purchaseType: r.purchaseType||'monthly',
+      isExtra: r.isExtra==='TRUE', unit: r.unit||'',
+      stockingQuarter: r.stockingQuarter||null
     })).filter(p => p.productName);
 
     const logs = parseSheet(logResp).map(r => ({
@@ -2794,6 +3029,417 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===================== UPDATE STOCK =====================
+function openUpdateStock(id) {
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+  openModal(`
+  <div class="modal-header"><div class="modal-title">Update Stock</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  <div style="font-size:14px;font-weight:800;margin-bottom:14px;">${p.name}
+    <span style="font-family:var(--mono);font-size:11px;color:var(--text3);font-weight:400;margin-left:8px;">currently: ${p.currentStock||0} ${p.unit||''}</span>
+  </div>
+  <div class="form-grid">
+    <div class="form-group"><label>Value</label>
+      <input id="us-val" type="number" step="0.01" value="${p.currentStock||0}">
+    </div>
+    <div class="form-group"><label>Update Type</label>
+      <select id="us-type">
+        <option value="set">Set to this exact value</option>
+        <option value="add">Add to current stock</option>
+        <option value="subtract">Subtract from current stock</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Note (optional)</label>
+      <input id="us-note" type="text" placeholder="e.g. manual count, spillage, used for cooking...">
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button class="btn btn-primary" style="flex:1" onclick="saveUpdateStock('${id}')">Update Stock</button>
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+  </div>`);
+}
+
+function saveUpdateStock(id) {
+  const p = state.products.find(pr => pr.id === id);
+  if (!p) return;
+  const val = parseFloat(document.getElementById('us-val').value) || 0;
+  const type = document.getElementById('us-type').value;
+  const note = document.getElementById('us-note').value.trim();
+  const oldStock = p.currentStock || 0;
+  if (type === 'set') p.currentStock = val;
+  else if (type === 'add') p.currentStock = oldStock + val;
+  else if (type === 'subtract') p.currentStock = Math.max(0, oldStock - val);
+  state.monthEndLogs.push({
+    id: 'log_'+Date.now(), cycle: state.settings.currentCycle,
+    date: new Date().toISOString().split('T')[0], type: 'stock-update',
+    note: `Stock update: ${p.name} ${oldStock} → ${p.currentStock} ${p.unit||''}${note?' ('+note+')':''}`
+  });
+  saveData();
+  showToast('Stock updated!');
+  closeModal();
+}
+
+// ===================== STOCK SNAPSHOT =====================
+function takeStockSnapshot(label) {
+  if (!state.stockSnapshots) state.stockSnapshots = [];
+  const snap = {
+    id: 'snap_'+Date.now(), date: new Date().toISOString().split('T')[0],
+    cycle: state.settings.currentCycle,
+    label: label || `Snapshot ${new Date().toLocaleDateString()}`,
+    items: state.products.map(p => ({
+      id:p.id, name:p.name, category:p.category||'', unit:p.unit||'',
+      currentStock:p.currentStock||0, plannedQty:p.plannedQty||0, price:p.price||0
+    }))
+  };
+  state.stockSnapshots.push(snap);
+  saveData();
+  return snap;
+}
+
+function openStockSnapshot() {
+  if (!state.stockSnapshots) state.stockSnapshots = [];
+  openModal(`
+  <div class="modal-header"><div class="modal-title">Stock Snapshots</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6;">Capture stock levels at any moment. Use snapshots to compare stock over time or generate recipe suggestions based on a specific date's stock.</p>
+  <div class="form-group" style="margin-bottom:10px;">
+    <label>Label</label>
+    <input id="snap-label" type="text" placeholder="e.g. Before shopping, Week 2 check...">
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:16px;" onclick="manualSnapshot()">📸 Take Snapshot Now</button>
+  <div class="card-title" style="margin-bottom:8px;">Previous Snapshots (${state.stockSnapshots.length})</div>
+  ${state.stockSnapshots.slice(-5).reverse().map(s => `
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+    <div>
+      <div style="font-size:12px;font-weight:700;">${s.label}</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">${s.date} · ${s.items.length} items · ${formatCycleLabel(s.cycle)}</div>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-outline btn-sm" onclick="viewSnapshot('${s.id}')">View</button>
+      <button class="btn btn-teal btn-sm" onclick="exportSnapshot('${s.id}')">CSV</button>
+    </div>
+  </div>`).join('')}
+  <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">Close</button></div>`);
+}
+
+function manualSnapshot() {
+  const label = document.getElementById('snap-label').value.trim() || `Snapshot ${new Date().toLocaleDateString()}`;
+  takeStockSnapshot(label);
+  showToast('Snapshot saved!');
+  openStockSnapshot();
+}
+
+function viewSnapshot(snapId) {
+  const snap = (state.stockSnapshots||[]).find(s => s.id === snapId);
+  if (!snap) return;
+  const cats = [...new Set(snap.items.map(i => i.category))].filter(Boolean).sort();
+  openModal(`
+  <div class="modal-header"><div class="modal-title">${snap.label}</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:14px;">${snap.date} · ${formatCycleLabel(snap.cycle)}</div>
+  ${cats.map(cat => `
+  <div style="margin-bottom:12px;">
+    <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:${CAT_COLORS[cat]||'var(--text2)'};margin-bottom:5px;text-transform:uppercase;">${cat}</div>
+    ${snap.items.filter(i => i.category === cat).map(i => `
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;font-size:12px;">${i.name}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:${(i.currentStock/Math.max(i.plannedQty,1))<0.25?'var(--accent3)':'var(--accent)'}">${i.currentStock}/${i.plannedQty} ${i.unit}</div>
+    </div>`).join('')}
+  </div>`).join('')}
+  <div class="modal-actions">
+    <button class="btn btn-teal" onclick="exportSnapshot('${snapId}')">Export CSV</button>
+    <button class="btn btn-outline" onclick="openStockSnapshot()">← Back</button>
+  </div>`);
+}
+
+function exportSnapshot(snapId) {
+  const snap = (state.stockSnapshots||[]).find(s => s.id === snapId);
+  if (!snap) return;
+  const rows = [['Name','Category','Unit','Stock','Planned','Price','Date','Cycle']];
+  snap.items.forEach(i => rows.push([i.name,i.category,i.unit,i.currentStock,i.plannedQty,i.price,snap.date,snap.cycle]));
+  downloadCSV(toCSV(rows), `pantryos-snapshot-${snap.date}.csv`);
+  showToast('Snapshot exported!');
+}
+
+// ===================== MONTH-END WIZARD =====================
+let meStockEdits = {};
+let meStockoutDecisions = {};
+
+function openMonthEndWizard() {
+  const products = state.products;
+  const stockouts = products.filter(p => (p.currentStock||0) === 0 && (p.plannedQty||0) > 0);
+  meStockEdits = {};
+  meStockoutDecisions = {};
+
+  openModal(`
+  <div class="modal-header"><div class="modal-title">Month-End Close</div><button class="modal-close" onclick="closeModal()">×</button></div>
+  ${stockouts.length > 0 ? `
+  <div style="background:#2d1000;border:1px solid var(--accent3);border-radius:10px;padding:12px;margin-bottom:14px;">
+    <div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:10px;">⚠ ${stockouts.length} item${stockouts.length>1?'s':''} at zero — what happened?</div>
+    ${stockouts.map(p => `
+    <div style="padding:8px 0;border-bottom:1px solid #3d2010;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="flex:1;font-size:12px;font-weight:700;">${p.name}</div>
+      <select onchange="meStockoutDecisions['${p.id}']=this.value" style="font-size:11px;padding:4px 8px;">
+        <option value="">— What happened? —</option>
+        <option value="topped-up">✓ Was topped up mid-cycle</option>
+        <option value="intentional">Intentional (didn't need more)</option>
+        <option value="failure">✗ Ran out, failed to restock</option>
+      </select>
+    </div>`).join('')}
+  </div>` : ''}
+  <div class="card-title" style="margin-bottom:10px;">Record Remaining Stock</div>
+  ${products.map(p => `
+  <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:700;">${p.name}</div>
+      <div style="font-size:10px;color:var(--text3);">${p.category||''} · planned: ${p.plannedQty||0} ${p.unit||''}</div>
+    </div>
+    <input type="number" step="0.01" min="0" value="${p.currentStock||0}" style="width:75px;text-align:center;padding:6px;"
+      onchange="meStockEdits['${p.id}']=parseFloat(this.value)||0">
+  </div>`).join('')}
+  <div class="modal-actions">
+    <button class="btn btn-primary" style="flex:1" onclick="completeME()">Close Cycle & Start Next</button>
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+  </div>`);
+}
+
+function completeME() {
+  const cycle = state.settings.currentCycle;
+  state.products.forEach(p => {
+    if (meStockEdits[p.id] !== undefined) p.currentStock = meStockEdits[p.id];
+  });
+  const failures = [], toppedUp = [], intentional = [];
+  Object.entries(meStockoutDecisions).forEach(([id, decision]) => {
+    const prod = state.products.find(p => p.id === id);
+    if (!prod) return;
+    if (decision === 'failure') failures.push(prod.name);
+    else if (decision === 'topped-up') toppedUp.push(prod.name);
+    else if (decision === 'intentional') intentional.push(prod.name);
+  });
+  const stillOut = state.products.filter(p => (p.currentStock||0) === 0 && (p.plannedQty||0) > 0);
+  const overstock = state.products.filter(p => (p.currentStock||0) > (p.plannedQty||0)*1.5);
+  let note = `✓ Cycle ${formatCycleLabel(cycle)} closed. ${stillOut.length} stock-outs, ${overstock.length} overstocked.`;
+  if (failures.length) note += ` Failed to restock: ${failures.join(', ')}.`;
+  if (toppedUp.length) note += ` Topped up mid-cycle: ${toppedUp.join(', ')}.`;
+  if (intentional.length) note += ` Intentional gaps: ${intentional.join(', ')}.`;
+  state.monthEndLogs.push({ id:'log_'+Date.now(), cycle, date:new Date().toISOString().split('T')[0], type:'close', note });
+  takeStockSnapshot(`Month-End ${formatCycleLabel(cycle)}`);
+  // Advance cycle
+  const [y, m] = cycle.split('-').map(Number);
+  state.settings.currentCycle = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
+  saveData();
+  showToast(`Cycle closed! Now in ${formatCycleLabel(state.settings.currentCycle)}`);
+  closeModal();
+}
+
+// ===================== RECIPES =====================
+const NIGERIAN_RECIPES = [
+  {name:'Jollof Rice',ingredients:['Rice','Tomato','Onion','Chicken','Pepper','Tomato paste','Vegetable oil','Stock cube'],category:'Grains & Carbs'},
+  {name:'Egusi Soup',ingredients:['Egusi','Palm oil','Stockfish','Smoked fish','Assorted meat','Spinach','Onion','Pepper','Crayfish'],category:'Proteins'},
+  {name:'Fried Rice',ingredients:['Rice','Carrot','Green peas','Chicken','Soy sauce','Vegetable oil','Onion','Sweet corn'],category:'Grains & Carbs'},
+  {name:'Pepper Soup',ingredients:['Assorted meat','Pepper soup spice','Crayfish','Onion','Scent leaf'],category:'Proteins'},
+  {name:'Ogbono Soup',ingredients:['Ogbono','Palm oil','Assorted meat','Stockfish','Crayfish','Onion','Pepper','Spinach'],category:'Proteins'},
+  {name:'Pounded Yam',ingredients:['Yam'],category:'Grains & Carbs'},
+  {name:'Beans & Plantain',ingredients:['Beans','Plantain','Palm oil','Onion','Pepper','Crayfish'],category:'Legumes & Pulses'},
+  {name:'Banga Soup (Ofe Akwu)',ingredients:['Palm fruit','Banga spice','Assorted meat','Stockfish','Crayfish','Onion','Pepper'],category:'Proteins'},
+  {name:'Moi Moi',ingredients:['Beans','Pepper','Onion','Egg','Vegetable oil','Crayfish'],category:'Legumes & Pulses'},
+  {name:'Akara',ingredients:['Beans','Pepper','Onion','Vegetable oil'],category:'Legumes & Pulses'},
+  {name:'Oha Soup',ingredients:['Oha leaves','Cocoyam','Palm oil','Assorted meat','Stockfish','Crayfish','Onion'],category:'Proteins'},
+  {name:'Groundnut Soup',ingredients:['Groundnut','Chicken','Tomato','Onion','Pepper','Palm oil','Stock cube'],category:'Proteins'},
+  {name:'Edikaikong',ingredients:['Ugwu leaf','Water leaf','Palm oil','Assorted meat','Stockfish','Crayfish','Onion','Periwinkle'],category:'Proteins'},
+  {name:'Stewed Beans',ingredients:['Beans','Tomato','Onion','Pepper','Palm oil','Stock cube','Crayfish'],category:'Legumes & Pulses'},
+  {name:'Suya',ingredients:['Beef','Suya spice','Groundnut flour','Vegetable oil','Onion'],category:'Proteins'},
+  {name:'Ofada Rice & Ayamase',ingredients:['Ofada rice','Green pepper','Onion','Assorted meat','Palm oil','Crayfish'],category:'Grains & Carbs'},
+  {name:'Afang Soup',ingredients:['Afang leaves','Water leaf','Palm oil','Assorted meat','Periwinkle','Crayfish','Onion','Stockfish'],category:'Proteins'},
+  {name:'Okra Soup',ingredients:['Okra','Palm oil','Assorted meat','Stockfish','Crayfish','Onion','Pepper'],category:'Vegetables'},
+  {name:'Efo Riro',ingredients:['Ugwu leaf','Tomato','Pepper','Onion','Assorted meat','Palm oil','Crayfish','Stockfish'],category:'Vegetables'},
+  {name:'Tuwo Shinkafa',ingredients:['Short grain rice'],category:'Grains & Carbs'},
+  {name:'Eba & Vegetable Soup',ingredients:['Garri','Ugwu leaf','Palm oil','Assorted meat','Crayfish','Onion','Pepper'],category:'Grains & Carbs'},
+  {name:'Amala & Ewedu',ingredients:['Yam flour','Ewedu leaves','Palm oil','Assorted meat','Crayfish','Locust bean'],category:'Grains & Carbs'},
+  {name:'Fried Plantain (Dodo)',ingredients:['Plantain','Vegetable oil'],category:'Fruits'},
+  {name:'Jollof Spaghetti',ingredients:['Spaghetti','Tomato','Onion','Pepper','Vegetable oil','Stock cube'],category:'Grains & Carbs'},
+];
+
+let recipeView = 'suggest';
+let recipePlanSelected = '';
+
+function renderRecipes() {
+  const stockNames = state.products.filter(p => (p.currentStock||0) > 0).map(p => p.name.toLowerCase());
+  function hasIngredient(ing) {
+    return stockNames.some(s => s.includes(ing.toLowerCase()) || ing.toLowerCase().includes(s));
+  }
+  const withMatch = NIGERIAN_RECIPES.map(recipe => {
+    const have = recipe.ingredients.filter(hasIngredient);
+    const missing = recipe.ingredients.filter(i => !hasIngredient(i));
+    const pct = Math.round((have.length / recipe.ingredients.length) * 100);
+    return {...recipe, have, missing, pct};
+  }).sort((a,b) => b.pct - a.pct);
+
+  const canMake = withMatch.filter(r => r.pct >= 80);
+  const almost = withMatch.filter(r => r.pct >= 50 && r.pct < 80);
+  const needMore = withMatch.filter(r => r.pct < 50);
+
+  return `
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+    <div class="filter-chip ${recipeView==='suggest'?'active':''}" onclick="recipeView='suggest';renderTab()">🍲 What Can I Cook?</div>
+    <div class="filter-chip ${recipeView==='plan'?'active':''}" onclick="recipeView='plan';renderTab()">🛒 Plan a Recipe</div>
+  </div>
+
+  ${recipeView === 'suggest' ? `
+  <div class="stats-grid" style="margin-bottom:12px;">
+    <div class="stat-card"><div class="stat-label">Can Make</div><div class="stat-value green">${canMake.length}</div><div class="stat-sub">80%+ stocked</div></div>
+    <div class="stat-card"><div class="stat-label">Almost</div><div class="stat-value yellow">${almost.length}</div><div class="stat-sub">50-79% stocked</div></div>
+  </div>
+  ${canMake.length > 0 ? `<div class="section-title" style="color:var(--accent);margin-bottom:8px;">✓ Can Make Now</div>` : ''}
+  ${canMake.map(r => recipeCard(r, 'var(--accent)')).join('')}
+  ${almost.length > 0 ? `<div class="section-title" style="color:var(--accent4);margin:12px 0 8px;">⚡ Almost — Buy a Few More Items</div>` : ''}
+  ${almost.map(r => recipeCard(r, 'var(--accent4)')).join('')}
+  ${needMore.length > 0 ? `<div class="section-title" style="color:var(--text2);margin:12px 0 8px;">📦 Need More Ingredients</div>` : ''}
+  ${needMore.slice(0,6).map(r => recipeCard(r, 'var(--text3)')).join('')}
+  ` : ''}
+
+  ${recipeView === 'plan' ? `
+  <div class="card">
+    <div class="card-title">Pick a Recipe to Plan</div>
+    <select id="plan-recipe" style="margin-bottom:12px;" onchange="recipePlanSelected=this.value;renderTab()">
+      <option value="">— Choose a recipe —</option>
+      ${NIGERIAN_RECIPES.map(r => `<option value="${r.name}" ${r.name===recipePlanSelected?'selected':''}>${r.name}</option>`).join('')}
+    </select>
+    ${(()=>{
+      if (!recipePlanSelected) return '<div style="color:var(--text3);font-size:12px;">Select a recipe to see what you need to buy.</div>';
+      const recipe = withMatch.find(r => r.name === recipePlanSelected);
+      if (!recipe) return '';
+      return `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:14px;font-weight:800;">${recipe.name}</div>
+        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:${recipe.pct>=80?'var(--accent)':recipe.pct>=50?'var(--accent4)':'var(--accent3)'};">${recipe.pct}% ready</div>
+      </div>
+      ${recipe.ingredients.map(ing => {
+        const have = stockNames.some(s => s.includes(ing.toLowerCase()) || ing.toLowerCase().includes(s));
+        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+          <div style="color:${have?'var(--accent)':'var(--accent3)'};font-size:15px;width:20px;">${have?'✓':'✗'}</div>
+          <div style="flex:1;font-size:12px;color:${have?'var(--text)':'var(--accent3)'};">${ing}</div>
+          ${!have?`<span style="font-size:10px;color:var(--accent3);font-family:var(--mono);">buy this</span>`:''}
+        </div>`;
+      }).join('')}
+      ${recipe.missing.length > 0 ? `
+      <button class="btn btn-primary" style="margin-top:12px;width:100%;" onclick="addMissingToShopList(${JSON.stringify(recipe.missing).replace(/"/g,'&quot;')})">
+        + Add ${recipe.missing.length} missing item${recipe.missing.length>1?'s':''} to Shopping List
+      </button>` : `<div style="color:var(--accent);font-size:12px;margin-top:12px;font-weight:700;">✓ You have everything! Time to cook.</div>`}`;
+    })()}
+  </div>
+  ` : ''}`;
+}
+
+function recipeCard(r, color) {
+  const stockNames = state.products.filter(p => (p.currentStock||0) > 0).map(p => p.name.toLowerCase());
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-size:13px;font-weight:800;">${r.name}</div>
+      <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${color};">${r.pct}%</div>
+    </div>
+    <div style="background:var(--border);border-radius:4px;height:3px;margin-bottom:8px;">
+      <div style="height:3px;border-radius:4px;background:${color};width:${r.pct}%;"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text2);line-height:1.7;">
+      Have: ${r.have.join(', ')||'—'}
+    </div>
+    ${r.missing.length > 0 ? `
+    <div style="font-size:11px;color:var(--accent3);margin-top:4px;">Need: ${r.missing.join(', ')}</div>
+    <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addMissingToShopList(${JSON.stringify(r.missing).replace(/"/g,'&quot;')})">+ Add missing to shopping list</button>
+    ` : ''}
+  </div>`;
+}
+
+function addMissingToShopList(missingArr) {
+  if (typeof missingArr === 'string') missingArr = JSON.parse(missingArr);
+  let added = 0;
+  missingArr.forEach(ing => {
+    const exists = state.products.find(p => p.name.toLowerCase() === ing.toLowerCase() || p.name.toLowerCase().includes(ing.toLowerCase()));
+    if (!exists) {
+      const newProd = {id:'p_'+Date.now()+'_'+Math.random(), name:ing, category:'Other', unit:'Piece', plannedQty:1, price:0, store:'', cycle:'monthly', currentStock:0, _shopOverride:true};
+      state.products.push(newProd);
+      added++;
+    } else {
+      if (!exists._shopOverride) exists._shopOverride = true;
+    }
+  });
+  saveData();
+  showTab('shopping');
+  showToast(`${missingArr.length} missing ingredient${missingArr.length>1?'s':''} added to shopping list`);
+}
+
+// ===================== GOOGLE DRIVE BACKUP =====================
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = SHEETS_SCOPE + ' ' + DRIVE_SCOPE;
+let driveBackupFileId = state.settings.driveFileId || null;
+
+async function driveBackup() {
+  if (!state.settings.sheetsConnected) return;
+  if (typeof gapi === 'undefined' || !gapi.client) return;
+  try {
+    const token = gapi.client.getToken();
+    if (!token) return;
+    const data = JSON.stringify(state, null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const metadata = {name:'PantryOS-Backup.json', mimeType:'application/json'};
+
+    if (driveBackupFileId) {
+      // Update existing file
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], {type:'application/json'}));
+      form.append('file', blob);
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveBackupFileId}?uploadType=multipart`, {
+        method:'PATCH', headers:{'Authorization':'Bearer '+token.access_token}, body:form
+      });
+    } else {
+      // Create new file
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], {type:'application/json'}));
+      form.append('file', blob);
+      const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method:'POST', headers:{'Authorization':'Bearer '+token.access_token}, body:form
+      });
+      const result = await resp.json();
+      driveBackupFileId = result.id;
+      state.settings.driveFileId = result.id;
+    }
+    state.settings.lastBackup = new Date().toLocaleTimeString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    console.log('Drive backup saved');
+  } catch(e) {
+    console.warn('Drive backup failed:', e);
+  }
+}
+
+// ===================== SETTINGS (custom units, categories) =====================
+function addCustomUnit() {
+  const val = document.getElementById('s-newunit').value.trim();
+  if (!val) return;
+  if (allUnits().includes(val)) { showToast('Unit already exists'); return; }
+  if (!state.customUnits) state.customUnits = [];
+  state.customUnits.push(val);
+  saveData(); showToast('Unit added!'); renderTab();
+}
+
+function removeCustomUnit(idx) {
+  state.customUnits.splice(idx, 1);
+  saveData(); renderTab();
+}
+
+function addCustomCategory() {
+  const val = document.getElementById('s-newcat').value.trim();
+  if (!val) return;
+  if (allCategories().includes(val)) { showToast('Category already exists'); return; }
+  if (!state.customCategories) state.customCategories = [];
+  state.customCategories.push(val);
+  saveData(); showToast('Category added!'); renderTab();
+}
+
+function removeCustomCategory(idx) {
+  state.customCategories.splice(idx, 1);
+  saveData(); renderTab();
 }
 
 // ===================== INIT =====================
