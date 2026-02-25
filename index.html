@@ -508,13 +508,25 @@ function updateCycleLabel() {
   document.getElementById('current-cycle-label').textContent = formatCycleLabel(state.settings.currentCycle);
 }
 
+// ===================== CYCLE HELPERS =====================
+function getCyclePurchases(cycle) {
+  // Stocking view: what was bought FOR this cycle (inventory health)
+  return state.purchases.filter(p => (p.stockingCycle || p.cycle) === cycle);
+}
+
+function getSpendPurchases(cycle) {
+  // Spend view: what was actually bought IN this cycle (financial)
+  return state.purchases.filter(p => (p.purchaseCycle || p.cycle) === cycle);
+}
+
 // ===================== DASHBOARD =====================
 function renderDashboard() {
   const cycle = state.settings.currentCycle;
   const products = state.products;
-  const cyclePurchases = state.purchases.filter(p => p.cycle === cycle);
+  const cyclePurchases = getCyclePurchases(cycle);   // stocking-based for inventory
+  const spendPurchases = getSpendPurchases(cycle);   // purchase-date-based for spend
 
-  const totalSpend = cyclePurchases.reduce((s, p) => s + (p.price * p.qty), 0);
+  const totalSpend = spendPurchases.reduce((s, p) => s + (p.price * p.qty), 0);
   const extraBuys = cyclePurchases.filter(p => p.isExtra).length;
   const totalItems = products.length;
   const stockouts = products.filter(p => (p.currentStock || 0) === 0 && p.plannedQty > 0).length;
@@ -709,7 +721,7 @@ function renderShopping() {
     return stock < planned;
   });
 
-  const extra = state.purchases.filter(p => p.cycle === cycle && p.isExtra);
+  const extra = state.purchases.filter(p => (p.stockingCycle || p.cycle) === cycle && p.isExtra);
 
   return `
     <div class="section-header">
@@ -770,31 +782,67 @@ function renderShopping() {
 // ===================== MONTH-END =====================
 function renderMonthEnd() {
   const cycle = state.settings.currentCycle;
-  const logs = state.monthEndLogs.filter(l => l.cycle === cycle);
+  const allCycleKeys = [...new Set([
+    ...state.purchases.map(p => p.cycle),
+    ...state.monthEndLogs.map(l => l.cycle),
+    cycle
+  ])].filter(Boolean).sort().reverse();
+
+  const selectedCycle = window._meViewCycle || cycle;
+  const logs = state.monthEndLogs.filter(l => l.cycle === selectedCycle);
+  const cyclePurchases = state.purchases.filter(p => (p.stockingCycle || p.cycle) === selectedCycle);
 
   return `
     <div class="section-header">
-      <div class="section-title">Month-End Close — ${formatCycleLabel(cycle)}</div>
+      <div class="section-title">Month-End Close</div>
     </div>
 
     <div class="card" style="border-color:#1a2d0e;">
-      <div class="card-title">Close Current Cycle</div>
+      <div class="card-title">Close Current Cycle — ${formatCycleLabel(cycle)}</div>
       <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
-        At month-end, record what's left in each item. This calculates stock-out rates and carry-overs.
+        Record what's left in each item. Calculates stock-out rates and carry-overs.
       </p>
       <button class="btn btn-primary" onclick="openMonthEndWizard()">Run Month-End Close</button>
     </div>
 
     <div class="section-header" style="margin-top:8px;">
-      <div class="section-title">Cycle Log</div>
-      <button class="btn btn-outline btn-sm" onclick="openAddNote()">+ Note</button>
+      <div class="section-title">View Cycle</div>
+    </div>
+    <div class="filters" style="margin-bottom:14px;">
+      ${allCycleKeys.slice(0,8).map(c => `
+        <div class="filter-chip ${selectedCycle===c?'active':''}" onclick="window._meViewCycle='${c}';renderTab()">${formatCycleLabel(c)}</div>
+      `).join('')}
     </div>
 
-    <div class="card">
-      ${logs.length === 0 ? `<div class="empty"><div class="empty-icon">📝</div><p>No logs for this cycle yet.</p></div>` : ''}
-      ${logs.map(l => `
+    <div class="section-header">
+      <div class="section-title">Purchases in ${formatCycleLabel(selectedCycle)} (${cyclePurchases.length})</div>
+      <button class="btn btn-outline btn-sm" onclick="openLogPurchase()">+ Log</button>
+    </div>
+    <div class="card" style="margin-bottom:14px;">
+      ${cyclePurchases.length === 0 ? `<div class="empty"><div class="empty-icon">🛒</div><p>No purchases logged for this cycle.</p></div>` : ''}
+      ${cyclePurchases.map(p => `
         <div class="log-item">
-          <div class="log-dot" style="background:${l.type==='close'?'var(--accent)':l.type==='extra'?'var(--accent4)':'var(--accent2)'}"></div>
+          <div class="log-dot" style="background:${p.isExtra?'var(--accent4)':'var(--accent2)'}"></div>
+          <div style="flex:1;">
+            <div class="log-text">${p.productName} — <span style="color:var(--accent);font-family:var(--mono);">${formatMoney(p.price * p.qty)}</span></div>
+            <div class="log-time">${p.date} · ${p.qty} ${p.unit||''} @ ${formatMoney(p.price)}/unit · ${p.store||'no store'}${p.isExtra?' · ⚠ extra':''}<br>
+              <span style="color:var(--text3);">Bought in: <span style="color:var(--accent2)">${formatCycleLabel(p.purchaseCycle||p.cycle)}</span> · Stocking: <span style="color:var(--accent4)">${formatCycleLabel(p.stockingCycle||p.cycle)}</span>${p.stockingQuarter?' · '+p.stockingQuarter:''}</span>
+            </div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="openEditPurchase('${p.id}')" style="flex-shrink:0;">Edit</button>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">Cycle Notes</div>
+      <button class="btn btn-outline btn-sm" onclick="openAddNote()">+ Note</button>
+    </div>
+    <div class="card">
+      ${logs.filter(l => l.type === 'note' || l.type === 'close').length === 0 ? `<div style="color:var(--text3);font-size:13px;">No notes for this cycle.</div>` : ''}
+      ${logs.filter(l => l.type === 'note' || l.type === 'close').map(l => `
+        <div class="log-item">
+          <div class="log-dot" style="background:${l.type==='close'?'var(--accent)':'var(--accent2)'}"></div>
           <div>
             <div class="log-text">${l.note}</div>
             <div class="log-time">${l.date} · ${l.type}</div>
@@ -803,7 +851,7 @@ function renderMonthEnd() {
       `).join('')}
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-top:14px;">
       <div class="card-title">Cycle History</div>
       ${renderCycleHistory()}
     </div>
@@ -836,7 +884,8 @@ let priceFromCycle = '';
 let priceToCycle = '';
 
 function cycleSpend(cycleKey) {
-  return state.purchases.filter(p => p.cycle === cycleKey).reduce((s, p) => s + (p.price * p.qty), 0);
+  // Spend reports use purchaseCycle — when money actually left your pocket
+  return state.purchases.filter(p => (p.purchaseCycle || p.cycle) === cycleKey).reduce((s, p) => s + (p.price * p.qty), 0);
 }
 
 function cycleKey(year, month) {
@@ -873,7 +922,13 @@ function formatMoney(v) {
 }
 
 function allCycles() {
-  return [...new Set(state.purchases.map(p => p.cycle))].sort();
+  const cycles = new Set();
+  state.purchases.forEach(p => {
+    if (p.purchaseCycle) cycles.add(p.purchaseCycle);
+    if (p.stockingCycle) cycles.add(p.stockingCycle);
+    if (p.cycle) cycles.add(p.cycle);
+  });
+  return [...cycles].sort();
 }
 
 function getProductPriceHistory(productId) {
@@ -1632,7 +1687,19 @@ function deleteProduct(id) {
 }
 
 // LOG PURCHASE
-function openLogPurchase() {
+function openLogPurchase(prefillDate) {
+  const defaultDate = prefillDate || new Date().toISOString().split('T')[0];
+  const defaultPurchaseCycle = dateTocycle(defaultDate);
+  const defaultStockingCycle = state.settings.currentCycle;
+
+  // Next month helper for stocking cycle default
+  const [cy, cm] = defaultStockingCycle.split('-').map(Number);
+  const nextCycle = cm === 12 ? `${cy+1}-01` : `${cy}-${String(cm+1).padStart(2,'0')}`;
+
+  // Build cycle options: last 3 months + current + next 2
+  const cycleOptions = buildCycleOptions(defaultPurchaseCycle, 3, 2);
+  const stockingOptions = buildCycleOptions(defaultStockingCycle, 1, 3);
+
   openModal(`
     <div class="modal-header">
       <div class="modal-title">Log Purchase</div>
@@ -1643,7 +1710,7 @@ function openLogPurchase() {
         <label>Product</label>
         <select id="fp-product" onchange="fillPurchaseDefaults(this.value)">
           <option value="">— Select Product —</option>
-          ${state.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          ${state.products.map(p => `<option value="${p.id}">${p.name} ${p.cycle==='quarterly'?'(Qtr)':''}</option>`).join('')}
           <option value="__new">+ New (unplanned item)</option>
         </select>
       </div>
@@ -1651,17 +1718,19 @@ function openLogPurchase() {
         <label>Item Name</label>
         <input id="fp-newname" type="text" placeholder="Unplanned item name">
       </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>Quantity</label>
           <input id="fp-qty" type="number" value="1" min="0.01" step="0.01">
         </div>
         <div class="form-group">
-          <label>Price per Unit ✏️ (edit if changed)</label>
+          <label>Price per Unit ✏️</label>
           <input id="fp-price" type="number" step="0.01" placeholder="0.00">
         </div>
       </div>
       <div id="fp-lastprice-hint" style="display:none;font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:-4px;"></div>
+
       <div class="form-group">
         <label>Store</label>
         <select id="fp-store">
@@ -1669,14 +1738,46 @@ function openLogPurchase() {
           ${state.stores.map(s => `<option value="${s}">${s}</option>`).join('')}
         </select>
       </div>
-      <div class="form-group">
-        <label>Date</label>
-        <input id="fp-date" type="date" value="${new Date().toISOString().split('T')[0]}">
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent2);margin-bottom:-4px;">📅 When vs. What For</div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date Purchased</label>
+            <input id="fp-date" type="date" value="${defaultDate}">
+          </div>
+          <div class="form-group">
+            <label>Bought In (cycle)</label>
+            <select id="fp-purchase-cycle">
+              ${cycleOptions.map(c => `<option value="${c}" ${c===defaultPurchaseCycle?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label style="color:var(--accent4);">Stocking Cycle — what month/quarter is this FOR? ★</label>
+          <select id="fp-stocking-cycle">
+            ${stockingOptions.map(c => `<option value="${c}" ${c===defaultStockingCycle?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div id="fp-quarterly-wrap" style="display:none;" class="form-group">
+          <label style="color:var(--accent2);">Stocking Quarter (for quarterly items)</label>
+          <select id="fp-stocking-quarter">
+            <option value="Q1">Q1 (Jan–Mar)</option>
+            <option value="Q2">Q2 (Apr–Jun)</option>
+            <option value="Q3">Q3 (Jul–Sep)</option>
+            <option value="Q4">Q4 (Oct–Dec)</option>
+          </select>
+        </div>
+
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.6;">
+          <strong style="color:var(--text2)">Date Purchased</strong> = actual day you bought it (for spend & price history)<br>
+          <strong style="color:var(--accent4)">Stocking Cycle ★</strong> = which month this stock is meant to cover (for planning & stock levels)
+        </div>
       </div>
-      <div class="form-group">
-        <label>Cycle</label>
-        <input id="fp-cycle" type="text" value="${state.settings.currentCycle}" placeholder="YYYY-MM">
-      </div>
+
       <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
         <input id="fp-extra" type="checkbox" style="width:auto">
         <label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;">Mark as Extra (unplanned purchase)</label>
@@ -1687,9 +1788,44 @@ function openLogPurchase() {
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
     </div>
   `);
+
   document.getElementById('fp-product').addEventListener('change', function() {
     document.getElementById('fp-newname-wrap').style.display = this.value === '__new' ? '' : 'none';
+    // Show quarterly field if product is quarterly
+    const prod = state.products.find(p => p.id === this.value);
+    document.getElementById('fp-quarterly-wrap').style.display = (prod && prod.cycle === 'quarterly') ? '' : 'none';
+    fillPurchaseDefaults(this.value);
   });
+
+  // Sync purchase-cycle select when date changes
+  document.getElementById('fp-date').addEventListener('change', function() {
+    const derived = dateTocycle(this.value);
+    const sel = document.getElementById('fp-purchase-cycle');
+    if (sel && [...sel.options].some(o => o.value === derived)) sel.value = derived;
+  });
+}
+
+function buildCycleOptions(centerCycle, before, after) {
+  const [y, m] = centerCycle.split('-').map(Number);
+  const options = [];
+  for (let i = -before; i <= after; i++) {
+    let mo = m + i; let yr = y;
+    while (mo <= 0) { mo += 12; yr--; }
+    while (mo > 12) { mo -= 12; yr++; }
+    options.push(`${yr}-${String(mo).padStart(2,'0')}`);
+  }
+  return options;
+}
+
+function dateTocycle(dateStr) {
+  if (!dateStr) return state.settings.currentCycle;
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function syncCycleFromDate(dateStr) {
+  const cycleInput = document.getElementById('fp-cycle');
+  if (cycleInput) cycleInput.value = dateTocycle(dateStr);
 }
 
 function fillPurchaseDefaults(id) {
@@ -1724,11 +1860,15 @@ function savePurchase() {
   const price = parseFloat(document.getElementById('fp-price').value) || 0;
   const store = document.getElementById('fp-store').value;
   const date = document.getElementById('fp-date').value;
-  const cycle = document.getElementById('fp-cycle').value || state.settings.currentCycle;
+  // SEPARATE: when bought vs what it's for
+  const purchaseCycle = document.getElementById('fp-purchase-cycle')?.value || dateTocycle(date);
+  const stockingCycle = document.getElementById('fp-stocking-cycle')?.value || state.settings.currentCycle;
+  const stockingQuarter = document.getElementById('fp-stocking-quarter')?.value || null;
   const isExtra = document.getElementById('fp-extra').checked;
 
   let productName = '';
   let unit = '';
+  let productCycleType = 'monthly';
 
   if (productId === '__new') {
     productName = document.getElementById('fp-newname').value.trim();
@@ -1738,12 +1878,11 @@ function savePurchase() {
     if (!p) { showToast('Select a product'); return; }
     productName = p.name;
     unit = p.unit;
-    // Update stock and price on product
+    productCycleType = p.cycle || 'monthly';
+    // Stock goes up when you log a purchase — uses stockingCycle for inventory health
     p.currentStock = (p.currentStock || 0) + qty;
     if (store) p.store = store;
-    if (price && price !== p.price) {
-      p.price = price; // update default price to latest market price
-    }
+    if (price && price !== p.price) p.price = price;
   }
 
   const purchase = {
@@ -1754,24 +1893,177 @@ function savePurchase() {
     price,
     store,
     date,
-    cycle,
+    // purchaseCycle = spend tracking, price history, MoM/QoQ/YoY spend reports
+    purchaseCycle,
+    // cycle kept for backwards compat = same as purchaseCycle
+    cycle: purchaseCycle,
+    // stockingCycle = inventory health, stock-out/overstock, shopping list
+    stockingCycle,
+    stockingQuarter: productCycleType === 'quarterly' ? (stockingQuarter || quarterOf(stockingCycle)) : null,
     isExtra,
     unit
   };
 
   state.purchases.push(purchase);
 
-  // Log it
   state.monthEndLogs.push({
     id: 'log_' + Date.now(),
-    cycle,
+    cycle: stockingCycle,
+    purchaseCycle,
     date,
     type: isExtra ? 'extra' : 'purchase',
-    note: `${isExtra ? '⚠ Extra: ' : ''}${qty} ${unit} of ${productName} — ${state.settings.currency}${parseFloat(price).toFixed(2)}/unit — Total: ${state.settings.currency}${(price*qty).toFixed(2)} @ ${store || 'no store specified'}`
+    note: `${isExtra ? '⚠ Extra: ' : ''}${qty} ${unit} of ${productName} — ${state.settings.currency}${parseFloat(price).toFixed(2)}/unit — Total: ${state.settings.currency}${(price*qty).toFixed(2)} @ ${store || 'no store'} [bought: ${formatCycleLabel(purchaseCycle)}, for: ${formatCycleLabel(stockingCycle)}${stockingQuarter ? ' / '+stockingQuarter : ''}]`
   });
 
   saveData();
   showToast('Purchase logged!');
+  closeModal();
+}
+
+function quarterOf(cycle) {
+  if (!cycle) return 'Q1';
+  const m = parseInt(cycle.split('-')[1]);
+  return `Q${Math.ceil(m/3)}`;
+}
+
+// EDIT EXISTING PURCHASE
+function openEditPurchase(id) {
+  const p = state.purchases.find(b => b.id === id);
+  if (!p) return;
+  const purchaseCycle = p.purchaseCycle || p.cycle || dateTocycle(p.date);
+  const stockingCycle = p.stockingCycle || p.cycle || state.settings.currentCycle;
+  const cycleOptions = buildCycleOptions(purchaseCycle, 4, 4);
+  const stockingOptions = buildCycleOptions(stockingCycle, 2, 4);
+  const prod = state.products.find(pr => pr.id === p.productId);
+  const isQuarterly = prod?.cycle === 'quarterly';
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">Edit Purchase</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--accent2);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+      Editing: <strong style="color:var(--text)">${p.productName}</strong>
+    </div>
+    <div class="form-grid">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantity</label>
+          <input id="ep-qty" type="number" value="${p.qty}" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Price per Unit</label>
+          <input id="ep-price" type="number" value="${p.price}" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Store</label>
+        <select id="ep-store">
+          <option value="">— None —</option>
+          ${state.stores.map(s => `<option value="${s}" ${p.store===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--accent2);margin-bottom:-4px;">📅 When vs. What For</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date Purchased</label>
+            <input id="ep-date" type="date" value="${p.date}">
+          </div>
+          <div class="form-group">
+            <label>Bought In (cycle)</label>
+            <select id="ep-purchase-cycle">
+              ${cycleOptions.map(c => `<option value="${c}" ${c===purchaseCycle?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="color:var(--accent4);">Stocking Cycle — what is this FOR? ★</label>
+          <select id="ep-stocking-cycle">
+            ${stockingOptions.map(c => `<option value="${c}" ${c===stockingCycle?'selected':''}>${formatCycleLabel(c)}</option>`).join('')}
+          </select>
+        </div>
+        ${isQuarterly ? `
+        <div class="form-group">
+          <label style="color:var(--accent2);">Stocking Quarter</label>
+          <select id="ep-stocking-quarter">
+            ${['Q1','Q2','Q3','Q4'].map(q => `<option value="${q}" ${(p.stockingQuarter||'Q1')===q?'selected':''}>${q}</option>`).join('')}
+          </select>
+        </div>` : ''}
+      </div>
+
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:10px;">
+        <input id="ep-extra" type="checkbox" style="width:auto" ${p.isExtra?'checked':''}>
+        <label style="text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;">Mark as Extra</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEditPurchase('${id}')">Save Changes</button>
+      <button class="btn btn-danger btn-sm" onclick="deletePurchase('${id}')">Delete</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function syncEPCycle(dateStr) {
+  const el = document.getElementById('ep-cycle');
+  if (el) el.value = dateTocycle(dateStr);
+}
+
+function saveEditPurchase(id) {
+  const p = state.purchases.find(b => b.id === id);
+  if (!p) return;
+
+  const oldQty = p.qty;
+  const newQty = parseFloat(document.getElementById('ep-qty').value) || p.qty;
+  const newPrice = parseFloat(document.getElementById('ep-price').value) || p.price;
+  const newStore = document.getElementById('ep-store').value;
+  const newDate = document.getElementById('ep-date').value;
+  const newPurchaseCycle = document.getElementById('ep-purchase-cycle')?.value || dateTocycle(newDate);
+  const newStockingCycle = document.getElementById('ep-stocking-cycle')?.value || p.stockingCycle || p.cycle;
+  const newStockingQuarter = document.getElementById('ep-stocking-quarter')?.value || p.stockingQuarter || null;
+  const newExtra = document.getElementById('ep-extra').checked;
+
+  // Adjust stock if qty changed
+  if (p.productId) {
+    const prod = state.products.find(pr => pr.id === p.productId);
+    if (prod) {
+      prod.currentStock = Math.max(0, (prod.currentStock || 0) - oldQty + newQty);
+      if (newPrice) prod.price = newPrice;
+      if (newStore) prod.store = newStore;
+    }
+  }
+
+  p.qty = newQty;
+  p.price = newPrice;
+  p.store = newStore;
+  p.date = newDate;
+  p.purchaseCycle = newPurchaseCycle;
+  p.cycle = newPurchaseCycle; // backwards compat
+  p.stockingCycle = newStockingCycle;
+  p.stockingQuarter = newStockingQuarter;
+  p.isExtra = newExtra;
+
+  saveData();
+  showToast('Purchase updated!');
+  closeModal();
+}
+
+function deletePurchase(id) {
+  const p = state.purchases.find(b => b.id === id);
+  if (!p) return;
+  if (!confirm(`Delete this purchase of ${p.productName}?`)) return;
+
+  // Reverse stock adjustment
+  if (p.productId) {
+    const prod = state.products.find(pr => pr.id === p.productId);
+    if (prod) prod.currentStock = Math.max(0, (prod.currentStock||0) - p.qty);
+  }
+
+  state.purchases = state.purchases.filter(b => b.id !== id);
+  saveData();
+  showToast('Purchase deleted');
   closeModal();
 }
 
