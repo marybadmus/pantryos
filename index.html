@@ -64,28 +64,34 @@ body {
 .nav {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  display: flex;
-  overflow-x: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   flex-shrink: 0;
-  scrollbar-width: none;
 }
-.nav::-webkit-scrollbar { display: none; }
 .nav-btn {
-  padding: 12px 18px;
+  padding: 10px 4px;
   border: none;
   background: none;
   color: var(--text2);
   font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
+  border-right: 1px solid var(--border);
   transition: all 0.2s;
-  position: relative;
+  text-align: center;
+  letter-spacing: 0.3px;
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(200,245,90,0.2);
+  user-select: none;
+  -webkit-user-select: none;
 }
-.nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-.nav-btn:hover:not(.active) { color: var(--text); }
+.nav-btn:last-child { border-right: none; }
+.nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface2); }
+.nav-btn:hover:not(.active) { color: var(--text); background: var(--surface2); }
 
 /* MAIN */
 .main { flex: 1; overflow-y: auto; padding: 20px; }
@@ -382,13 +388,13 @@ textarea { resize: vertical; min-height: 70px; }
 </div>
 
 <div class="nav">
-  <button class="nav-btn active" onclick="showTab('dashboard')">Dashboard</button>
-  <button class="nav-btn" onclick="showTab('inventory')">Inventory</button>
-  <button class="nav-btn" onclick="showTab('shopping')">Shopping List</button>
-  <button class="nav-btn" onclick="showTab('monthend')">Month-End</button>
-  <button class="nav-btn" onclick="showTab('analysis')">Analysis</button>
-  <button class="nav-btn" onclick="showTab('importexport')">CSV</button>
-  <button class="nav-btn" onclick="showTab('settings')">Settings</button>
+  <button class="nav-btn active" data-tab="dashboard">🏠 Home</button>
+  <button class="nav-btn" data-tab="inventory">📦 Stock</button>
+  <button class="nav-btn" data-tab="shopping">🛒 Shop</button>
+  <button class="nav-btn" data-tab="monthend">📅 Month</button>
+  <button class="nav-btn" data-tab="analysis">📊 Analysis</button>
+  <button class="nav-btn" data-tab="importexport">📁 CSV</button>
+  <button class="nav-btn" data-tab="settings">⚙️ Settings</button>
 </div>
 
 <div class="main" id="main-content">
@@ -492,14 +498,28 @@ function showTab(tab) {
 
 function renderTab() {
   const m = document.getElementById('main-content');
-  switch(currentTab) {
-    case 'dashboard': m.innerHTML = renderDashboard(); break;
-    case 'inventory': m.innerHTML = renderInventory(); break;
-    case 'shopping': m.innerHTML = renderShopping(); break;
-    case 'monthend': m.innerHTML = renderMonthEnd(); break;
-    case 'analysis': m.innerHTML = renderAnalysis(); break;
-    case 'importexport': m.innerHTML = renderCSV(); break;
-    case 'settings': m.innerHTML = renderSettings(); break;
+  try {
+    switch(currentTab) {
+      case 'dashboard': m.innerHTML = renderDashboard(); break;
+      case 'inventory': m.innerHTML = renderInventory(); break;
+      case 'shopping': m.innerHTML = renderShopping(); break;
+      case 'monthend': m.innerHTML = renderMonthEnd(); break;
+      case 'analysis': m.innerHTML = renderAnalysis(); break;
+      case 'importexport': m.innerHTML = renderCSV(); break;
+      case 'settings': m.innerHTML = renderSettings(); break;
+    }
+  } catch(err) {
+    console.error('PantryOS renderTab error:', err);
+    m.innerHTML = `
+      <div class="card" style="border-color:var(--accent3);">
+        <div class="card-title" style="color:var(--accent3);">Tab Error</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px;">
+          Something went wrong loading this tab.<br>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--accent3);">${err.message}</span>
+        </p>
+        <button class="btn btn-outline" onclick="currentTab='dashboard';renderTab()">← Back to Home</button>
+      </div>
+    `;
   }
   updateCycleLabel();
 }
@@ -2769,6 +2789,7 @@ renderCSV = function() {
 };
 
 // ===================== TOAST =====================
+function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
@@ -2776,6 +2797,11 @@ renderCSV = function() {
 }
 
 // ===================== INIT =====================
+// Attach nav clicks after all functions are defined
+document.querySelectorAll('.nav-btn[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+});
+
 renderTab();
 </script>
 </body>
