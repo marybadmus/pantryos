@@ -2409,7 +2409,9 @@ function openMonthEndWizard() {
       <div style="font-size:12px;font-weight:700;">${p.name}</div>
       <div style="font-size:10px;color:var(--text3);">${p.category||''} · planned: ${p.plannedQty||0} ${p.unit||''}</div>
     </div>
-    <input type="number" step="0.01" min="0" value="${p.currentStock||0}" style="width:75px;text-align:center;padding:6px;"
+    <input type="number" step="0.01" min="0" value="${p.currentStock||0}" 
+      id="me-stock-${p.id}"
+      style="width:75px;text-align:center;padding:6px;"
       onchange="meStockEdits['${p.id}']=parseFloat(this.value)||0">
   </div>`).join('')}
 
@@ -2427,23 +2429,31 @@ function importMEStockCSV(input) {
   reader.onload = e => {
     try {
       const rows = parseCSV(e.target.result);
-      let matched = 0;
+      let matched = 0, unmatched = [];
       rows.forEach(row => {
-        const name = (row.name || row.Name || row.product || row.Product || '').trim().toLowerCase();
-        const stock = parseFloat(row.currentStock || row.current_stock || row.stock || row.Stock || row.balance || 0);
+        const name = (row.name || row.Name || row.product || row.Product || '').trim();
+        const stock = parseFloat(row.currentStock || row.current_stock || row.stock || row.Stock || row.balance || row.Balance || 0);
         if (!name) return;
-        const prod = state.products.find(p => p.name.toLowerCase() === name || p.name.toLowerCase().includes(name));
+        const nameLower = name.toLowerCase();
+        const prod = state.products.find(p =>
+          p.name.toLowerCase() === nameLower ||
+          p.name.toLowerCase().replace(/[^a-z0-9]/g,'') === nameLower.replace(/[^a-z0-9]/g,'')
+        );
         if (prod) {
           meStockEdits[prod.id] = stock;
-          // Update the input field visually
-          const input = document.getElementById('me-stock-' + prod.id);
-          if (input) input.value = stock;
+          // Update the visible input field immediately
+          const el = document.getElementById('me-stock-' + prod.id);
+          if (el) { el.value = stock; el.style.background = 'var(--accent)22'; }
           matched++;
+        } else {
+          unmatched.push(name);
         }
       });
-      showToast(`CSV loaded — ${matched} products matched. Review then click Close Cycle.`);
+      let msg = `✓ ${matched} of ${rows.length} products matched`;
+      if (unmatched.length) msg += `. Not found: ${unmatched.slice(0,3).join(', ')}${unmatched.length>3?' +more':''}`;
+      showToast(msg);
     } catch(err) {
-      showToast('CSV error: check format (name, currentStock columns)');
+      showToast('CSV error: ' + err.message);
     }
   };
   reader.readAsText(file);
@@ -2453,10 +2463,16 @@ function importMEStockCSV(input) {
 function completeME() {
   const cycle = state.settings.currentCycle;
 
-  // Apply stock updates
+  // Apply stock edits from modal inputs or CSV upload
   state.products.forEach(p => {
-    if (meStockEdits[p.id] !== undefined) p.currentStock = meStockEdits[p.id];
-    else if (meStockUpdates && meStockUpdates[p.id] !== undefined) p.currentStock = meStockUpdates[p.id];
+    // Read live input field value first (most up-to-date)
+    const inputEl = document.getElementById('me-stock-' + p.id);
+    if (inputEl) {
+      p.currentStock = parseFloat(inputEl.value) || 0;
+    } else if (meStockEdits[p.id] !== undefined) {
+      p.currentStock = meStockEdits[p.id];
+    }
+    p.updatedAt = new Date().toISOString();
   });
 
   // Process stock-out decisions
@@ -2497,8 +2513,11 @@ function completeME() {
 }
 
 function downloadMETemplate() {
-  const rows = [['name','currentStock','unit']];
-  state.products.forEach(p => rows.push([p.name, p.currentStock||0, p.unit||'']));
+  const rows = state.products.map(p => ({
+    name: p.name,
+    currentStock: p.currentStock || 0,
+    unit: p.unit || ''
+  }));
   downloadCSV(toCSV(rows), `pantryos-stock-template-${state.settings.currentCycle}.csv`);
   showToast('Template downloaded — fill in currentStock column and upload');
 }
