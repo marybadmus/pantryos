@@ -3030,17 +3030,27 @@ async function sheetsPullAll() {
       currentStock: parseNum(r.currentStock), updatedAt: r.updatedAt||''
     })).filter(p => p.name);
 
-    const purchases = parseSheet(buyResp).map(r => ({
-      id: r.id||'buy_'+Date.now()+Math.random(), productId: r.productId||null,
-      productName: r.productName||'', qty: parseNum(r.qty),
-      price: parseNum(r.price), store: r.store||'', date: r.date||'',
-      purchaseCycle: r.purchaseCycle||r.cycle||'',
-      stockingCycle: r.stockingCycle||r.cycle||'',
-      cycle: r.purchaseCycle||r.cycle||'',
-      purchaseType: r.purchaseType||'monthly',
-      isExtra: r.isExtra==='TRUE', unit: r.unit||'',
-      stockingQuarter: r.stockingQuarter||null
-    })).filter(p => p.productName);
+    const purchases = parseSheet(buyResp).map(r => {
+      // Fall back to the product's own unit if purchase unit is blank
+      const productUnit = r.unit || (() => {
+        const match = products.find(p =>
+          p.name.toLowerCase() === (r.productName||'').toLowerCase() ||
+          (r.productId && p.id === r.productId)
+        );
+        return match ? match.unit : '';
+      })();
+      return {
+        id: r.id||'buy_'+Date.now()+Math.random(), productId: r.productId||null,
+        productName: r.productName||'', qty: parseNum(r.qty),
+        price: parseNum(r.price), store: r.store||'', date: r.date||'',
+        purchaseCycle: r.purchaseCycle||r.cycle||'',
+        stockingCycle: r.stockingCycle||r.cycle||'',
+        cycle: r.purchaseCycle||r.cycle||'',
+        purchaseType: r.purchaseType||'monthly',
+        isExtra: r.isExtra==='TRUE', unit: productUnit,
+        stockingQuarter: r.stockingQuarter||null
+      };
+    }).filter(p => p.productName);
 
     const logs = parseSheet(logResp).map(r => ({
       id: r.id||'log_'+Date.now()+Math.random(),
