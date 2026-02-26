@@ -2373,6 +2373,20 @@ function openMonthEndWizard() {
 
   openModal(`
   <div class="modal-header"><div class="modal-title">Month-End Close</div><button class="modal-close" onclick="closeModal()">×</button></div>
+
+  <!-- Sticky action bar at TOP so it's always visible -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;position:sticky;top:0;background:var(--surface);padding:10px 0;z-index:10;border-bottom:1px solid var(--border);">
+    <button class="btn btn-primary" style="flex:1" onclick="completeME()">✓ Close Cycle & Start Next</button>
+    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+  </div>
+
+  <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6;">
+    Update remaining stock for each item, then click <strong style="color:var(--accent)">Close Cycle</strong> above.
+    Or <label style="color:var(--accent2);cursor:pointer;text-decoration:underline;" for="me-csv-upload">upload a CSV</label> with name + currentStock columns
+    (<span style="color:var(--text3);cursor:pointer;text-decoration:underline;" onclick="downloadMETemplate()">download template</span>).
+    <input type="file" id="me-csv-upload" accept=".csv" style="display:none" onchange="importMEStockCSV(this)">
+  </p>
+
   ${stockouts.length > 0 ? `
   <div style="background:#2d1000;border:1px solid var(--accent3);border-radius:10px;padding:12px;margin-bottom:14px;">
     <div style="font-size:11px;font-weight:700;color:var(--accent3);margin-bottom:10px;">⚠ ${stockouts.length} item${stockouts.length>1?'s':''} at zero — what happened?</div>
@@ -2387,6 +2401,7 @@ function openMonthEndWizard() {
       </select>
     </div>`).join('')}
   </div>` : ''}
+
   <div class="card-title" style="margin-bottom:10px;">Record Remaining Stock</div>
   ${products.map(p => `
   <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
@@ -2397,10 +2412,42 @@ function openMonthEndWizard() {
     <input type="number" step="0.01" min="0" value="${p.currentStock||0}" style="width:75px;text-align:center;padding:6px;"
       onchange="meStockEdits['${p.id}']=parseFloat(this.value)||0">
   </div>`).join('')}
-  <div class="modal-actions">
-    <button class="btn btn-primary" style="flex:1" onclick="completeME()">Close Cycle & Start Next</button>
+
+  <!-- Also repeat button at bottom for convenience -->
+  <div style="display:flex;gap:8px;margin-top:20px;">
+    <button class="btn btn-primary" style="flex:1" onclick="completeME()">✓ Close Cycle & Start Next</button>
     <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
   </div>`);
+}
+
+function importMEStockCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCSV(e.target.result);
+      let matched = 0;
+      rows.forEach(row => {
+        const name = (row.name || row.Name || row.product || row.Product || '').trim().toLowerCase();
+        const stock = parseFloat(row.currentStock || row.current_stock || row.stock || row.Stock || row.balance || 0);
+        if (!name) return;
+        const prod = state.products.find(p => p.name.toLowerCase() === name || p.name.toLowerCase().includes(name));
+        if (prod) {
+          meStockEdits[prod.id] = stock;
+          // Update the input field visually
+          const input = document.getElementById('me-stock-' + prod.id);
+          if (input) input.value = stock;
+          matched++;
+        }
+      });
+      showToast(`CSV loaded — ${matched} products matched. Review then click Close Cycle.`);
+    } catch(err) {
+      showToast('CSV error: check format (name, currentStock columns)');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 function completeME() {
@@ -2447,6 +2494,13 @@ function completeME() {
   saveData();
   showToast(`Cycle closed! Now in ${formatCycleLabel(next)}`);
   closeModal();
+}
+
+function downloadMETemplate() {
+  const rows = [['name','currentStock','unit']];
+  state.products.forEach(p => rows.push([p.name, p.currentStock||0, p.unit||'']));
+  downloadCSV(toCSV(rows), `pantryos-stock-template-${state.settings.currentCycle}.csv`);
+  showToast('Template downloaded — fill in currentStock column and upload');
 }
 
 // ADD NOTE
