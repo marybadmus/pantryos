@@ -618,20 +618,20 @@ function renderDashboard() {
         <div class="stat-value green">${state.settings.currency}${totalSpend.toFixed(0)}</div>
         <div class="stat-sub">${cyclePurchases.length} purchases</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" onclick="inventoryFilter='extrabuy';showTab('inventory')" style="cursor:pointer;" title="View extra buys">
         <div class="stat-label">Extra Buys</div>
         <div class="stat-value yellow">${extraBuys}</div>
-        <div class="stat-sub">unplanned purchases</div>
+        <div class="stat-sub">tap to view ↗</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" onclick="inventoryFilter='stockout';showTab('inventory')" style="cursor:pointer;" title="View stock-outs">
         <div class="stat-label">Stock-Outs</div>
         <div class="stat-value red">${stockouts}</div>
-        <div class="stat-sub">items at 0</div>
+        <div class="stat-sub">tap to view ↗</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" onclick="inventoryFilter='overstock';showTab('inventory')" style="cursor:pointer;" title="View overstocked">
         <div class="stat-label">Overstocked</div>
         <div class="stat-value teal">${overstocked}</div>
-        <div class="stat-sub">items &gt;150% plan</div>
+        <div class="stat-sub">tap to view ↗</div>
       </div>
     </div>
 
@@ -710,16 +710,29 @@ function renderInventory() {
 
   const cats = ['all', ...new Set(products.map(p => p.category))];
 
+  // Counts for badge display
+  const stockOutCount = state.products.filter(p => (p.currentStock||0) === 0 && (p.plannedQty||0) > 0).length;
+  const overstockCount = state.products.filter(p => (p.currentStock||0) > (p.plannedQty||0) * 1.5).length;
+  const extraBuyCount = state.products.filter(p => (p.currentStock||0) > (p.plannedQty||0)).length;
+
   if (inventorySearch) {
     products = products.filter(p => p.name.toLowerCase().includes(inventorySearch.toLowerCase()) || (p.category||'').toLowerCase().includes(inventorySearch.toLowerCase()));
   }
   if (inventoryFilter !== 'all') {
     if (inventoryFilter === 'monthly' || inventoryFilter === 'quarterly') {
       products = products.filter(p => p.cycle === inventoryFilter);
+    } else if (inventoryFilter === 'stockout') {
+      products = products.filter(p => (p.currentStock||0) === 0 && (p.plannedQty||0) > 0);
+    } else if (inventoryFilter === 'overstock') {
+      products = products.filter(p => (p.currentStock||0) > (p.plannedQty||0) * 1.5);
+    } else if (inventoryFilter === 'extrabuy') {
+      products = products.filter(p => (p.currentStock||0) > (p.plannedQty||0));
     } else {
       products = products.filter(p => p.category === inventoryFilter);
     }
   }
+
+  const isStockEditMode = ['stockout','overstock','extrabuy'].includes(inventoryFilter);
 
   return `
     <div class="section-header">
@@ -739,22 +752,27 @@ function renderInventory() {
       <div class="filter-chip ${inventoryFilter==='all'?'active':''}" onclick="inventoryFilter='all';renderTab()">All</div>
       <div class="filter-chip ${inventoryFilter==='monthly'?'active':''}" onclick="inventoryFilter='monthly';renderTab()">Monthly</div>
       <div class="filter-chip ${inventoryFilter==='quarterly'?'active':''}" onclick="inventoryFilter='quarterly';renderTab()">Quarterly</div>
+      <div class="filter-chip ${inventoryFilter==='stockout'?'active':''}" style="${inventoryFilter==='stockout'?'':'background:var(--surface2);color:var(--accent3);border-color:var(--accent3)33;'}" onclick="inventoryFilter='stockout';renderTab()">⚠ Stock Out${stockOutCount>0?` (${stockOutCount})`:''}</div>
+      <div class="filter-chip ${inventoryFilter==='overstock'?'active':''}" style="${inventoryFilter==='overstock'?'':'background:var(--surface2);color:var(--accent2);border-color:var(--accent2)33;'}" onclick="inventoryFilter='overstock';renderTab()">↑ Overstock${overstockCount>0?` (${overstockCount})`:''}</div>
+      <div class="filter-chip ${inventoryFilter==='extrabuy'?'active':''}" style="${inventoryFilter==='extrabuy'?'':'background:var(--surface2);color:var(--accent4);border-color:var(--accent4)33;'}" onclick="inventoryFilter='extrabuy';renderTab()">+ Extra Buy${extraBuyCount>0?` (${extraBuyCount})`:''}</div>
       ${allCategories().filter(c => state.products.some(p => p.category === c)).map(c =>
         `<div class="filter-chip ${inventoryFilter===c?'active':''}" onclick="inventoryFilter='${c}';renderTab()">${c}</div>`
       ).join('')}
     </div>
 
+    ${isStockEditMode ? `<div style="font-size:11px;color:var(--text2);margin-bottom:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">✏️ Edit stock balance directly below — tap a field and save.</div>` : ''}
+
     ${products.length === 0 ? `
       <div class="empty">
         <div class="empty-icon">📦</div>
-        <h3>No products yet</h3>
-        <p>Add your first product or import via CSV</p>
+        <h3>No products found</h3>
+        <p>${inventoryFilter==='stockout'?'No stock-outs — all items have stock!':inventoryFilter==='overstock'?'No overstocked items.':inventoryFilter==='extrabuy'?'No extra buys — all items within planned qty.':'Add your first product or import via CSV'}</p>
       </div>
-    ` : products.map(p => renderProductCard(p)).join('')}
+    ` : products.map(p => renderProductCard(p, isStockEditMode)).join('')}
   `;
 }
 
-function renderProductCard(p) {
+function renderProductCard(p, editMode) {
   const stock = p.currentStock || 0;
   const planned = p.plannedQty || 1;
   const pct = Math.min(100, Math.round((stock / planned) * 100));
@@ -763,7 +781,7 @@ function renderProductCard(p) {
   const catColor = CAT_COLORS[p.category] || '#8b8fa0';
 
   return `
-    <div class="product-item" onclick="openEditProduct('${p.id}')">
+    <div class="product-item" onclick="${editMode?'':'openEditProduct(''+p.id+'')'}">
       <div class="product-top">
         <div class="product-name">${p.name}</div>
         <div class="product-price">${price}<span style="color:var(--text3);font-size:10px;">/${p.unit||'unit'}</span></div>
@@ -778,8 +796,34 @@ function renderProductCard(p) {
         <span class="stock-label">${stock}/${planned} ${p.unit||''}</span>
         <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openUpdateStock('${p.id}')">Update</button>
       </div>
+      ${editMode ? `
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);" onclick="event.stopPropagation()">
+        <label style="font-size:10px;color:var(--text2);white-space:nowrap;text-transform:uppercase;letter-spacing:0.8px;">Stock Balance</label>
+        <input type="number" min="0" step="0.25" value="${stock}"
+          id="stock-edit-${p.id}"
+          style="width:90px;padding:6px 10px;font-size:13px;text-align:center;"
+          onclick="event.stopPropagation()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();saveInlineStock('${p.id}')}"
+        >
+        <span style="font-size:11px;color:var(--text2);">${p.unit||''}</span>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();saveInlineStock('${p.id}')">Save</button>
+      </div>` : ''}
     </div>
   `;
+}
+
+function saveInlineStock(productId) {
+  const input = document.getElementById('stock-edit-' + productId);
+  if (!input) return;
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val < 0) { showToast('Enter a valid number'); return; }
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return;
+  product.currentStock = val;
+  product.updatedAt = new Date().toISOString();
+  saveData();
+  showToast(product.name + ' stock updated to ' + val + ' ' + (product.unit||''));
+  renderTab();
 }
 
 // ===================== HISTORICAL QTY SUGGESTION =====================
@@ -2822,6 +2866,7 @@ function renderSheetsUI() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <button class="btn btn-primary" onclick="sheetsPushAll()">↑ Push to Sheets</button>
         <button class="btn btn-teal" onclick="sheetsPullAll()">↓ Pull from Sheets</button>
+        <button class="btn btn-yellow btn-sm" onclick="sheetsPushStockOnly()">📦 Push Stock Only</button>
         <button class="btn btn-outline btn-sm" onclick="disconnectSheets()">Disconnect</button>
       </div>
       <div id="sync-status" style="font-family:var(--mono);font-size:11px;color:var(--text3);">${state.settings.lastSync ? 'Last sync: '+state.settings.lastSync : 'Not synced yet'}</div>
@@ -2988,6 +3033,59 @@ async function sheetsPushAll() {
   } catch(e) {
     setSyncStatus('Push failed: ' + (e.result?.error?.message || e.message));
     showToast('Push failed — see setup guide');
+    console.error(e);
+  }
+}
+
+async function sheetsPushStockOnly() {
+  if (!ensureToken('push')) return;
+  setSyncStatus('Pushing stock balances...');
+  try {
+    const sid = state.settings.sheetId;
+    // Read existing Products sheet to find the currentStock column index
+    const existing = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: sid, range: 'Products!A1:Z1'
+    });
+    const headers = (existing.result.values||[[]])[0] || [];
+    const stockCol = headers.indexOf('currentStock');
+    const nameCol = headers.indexOf('name');
+    if (stockCol === -1 || nameCol === -1) {
+      showToast('Push All first to set up sheet headers');
+      setSyncStatus('Push Stock failed: run Push to Sheets first');
+      return;
+    }
+
+    // Read all product names from sheet to match rows
+    const allRows = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: sid, range: `Products!A2:A5000`
+    });
+    const sheetNames = (allRows.result.values||[]).map(r => (r[0]||'').toLowerCase().trim());
+
+    // Build targeted cell updates only for currentStock column
+    const colLetter = String.fromCharCode(65 + stockCol);
+    const updates = [];
+    state.products.forEach(p => {
+      const rowIdx = sheetNames.findIndex(n => n === (p.name||'').toLowerCase().trim());
+      if (rowIdx !== -1) {
+        updates.push({ range: `Products!${colLetter}${rowIdx + 2}`, values: [[p.currentStock||0]] });
+      }
+    });
+
+    if (!updates.length) { showToast('No matching products found in sheet'); return; }
+
+    await gapi.client.sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sid,
+      resource: { valueInputOption: 'USER_ENTERED', data: updates }
+    });
+
+    const now = new Date().toLocaleString();
+    state.settings.lastSync = now;
+    saveData();
+    setSyncStatus('✓ Stock balances pushed at ' + now);
+    showToast(`Stock balances pushed for ${updates.length} products!`);
+  } catch(e) {
+    setSyncStatus('Push Stock failed: ' + (e.result?.error?.message || e.message));
+    showToast('Push Stock failed');
     console.error(e);
   }
 }
@@ -3221,6 +3319,7 @@ function renderRecipes() {
   <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
     <div class="filter-chip ${recipeView==='suggest'?'active':''}" onclick="recipeView='suggest';renderTab()">🍲 What Can I Cook?</div>
     <div class="filter-chip ${recipeView==='plan'?'active':''}" onclick="recipeView='plan';renderTab()">🛒 Plan a Recipe</div>
+    <div class="filter-chip ${recipeView==='mealplan'?'active':''}" onclick="recipeView='mealplan';renderTab()">📅 Weekly Meal Plan</div>
   </div>
 
   ${recipeView === 'suggest' ? `
@@ -3266,7 +3365,119 @@ function renderRecipes() {
       </button>` : `<div style="color:var(--accent);font-size:12px;margin-top:12px;font-weight:700;">✓ You have everything! Time to cook.</div>`}`;
     })()}
   </div>
-  ` : ''}`;
+  ` : ''}
+
+  ${recipeView === 'mealplan' ? renderWeeklyMealPlan(withMatch) : ''}`;
+}
+
+function renderWeeklyMealPlan(withMatch) {
+  // Seed based on current week number so plan varies week-on-week but is stable within a week
+  const now = new Date();
+  const weekNum = Math.floor((now - new Date(now.getFullYear(),0,1)) / 604800000);
+  function seededRand(seed) {
+    let s = seed;
+    return function() { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+  }
+  const rand = seededRand(weekNum * 31 + 7);
+
+  const stockNames = state.products.filter(p => (p.currentStock||0) > 0).map(p => p.name.toLowerCase());
+  function hasIngredient(ing) {
+    return stockNames.some(s => s.includes(ing.toLowerCase()) || ing.toLowerCase().includes(s));
+  }
+
+  // Classify recipes
+  const available = withMatch.filter(r => r.pct >= 60).map(r => r.name);
+  const swallows = ['Pounded Yam','Eba & Vegetable Soup','Amala & Ewedu','Tuwo Shinkafa'];
+  const riceDishes = ['Jollof Rice','Fried Rice','Ofada Rice & Ayamase'];
+  const soups = ['Egusi Soup','Ogbono Soup','Oha Soup','Afang Soup','Okra Soup','Efo Riro','Edikaikong','Banga Soup (Ofe Akwu)','Groundnut Soup'];
+  const easyMeals = ['Beans & Plantain','Moi Moi','Akara','Fried Plantain (Dodo)','Stewed Beans','Pepper Soup','Jollof Spaghetti','Suya'];
+
+  // Helper: pick from list preferring available stock, seeded shuffle
+  function pick(list, exclude) {
+    let pool = list.filter(m => available.includes(m) && !exclude.includes(m));
+    if (!pool.length) pool = list.filter(m => !exclude.includes(m));
+    if (!pool.length) pool = list;
+    return pool[Math.floor(rand() * pool.length)];
+  }
+
+  // Build 7-day plan following the rules:
+  // Sunday: Rice dish → carries Monday lunch + Tuesday lunch
+  // Swallow max 2x in the week
+  // Easy, nourishing meals (postpartum family of 3)
+  // Vary by week using seeded random
+
+  const used = [];
+  let swallowCount = 0;
+
+  // Sunday: pick rice dish
+  const sundayRice = pick(riceDishes, used);
+  used.push(sundayRice);
+
+  // Pick 2 soups (for swallow days and stew base)
+  const soup1 = pick(soups, used);
+  used.push(soup1);
+  const soup2 = pick(soups, used);
+  used.push(soup2);
+
+  // Swallow days (max 2): Wed and Fri by default, but shift by week
+  const swallowDays = weekNum % 2 === 0 ? [2, 4] : [3, 5]; // Wed+Fri or Thu+Sat
+  const swallow1 = pick(swallows, used);
+  used.push(swallow1);
+  const swallow2 = pick(swallows, used);
+  used.push(swallow2);
+
+  // Easy meals for remaining slots
+  const easy1 = pick(easyMeals, used); used.push(easy1);
+  const easy2 = pick(easyMeals, used); used.push(easy2);
+  const easy3 = pick(easyMeals, used); used.push(easy3);
+
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const CARRY = '🍚 Leftover from Sunday';
+
+  // Assign meals
+  // Sun: Rice, Mon: Rice leftovers (lunch) + easy dinner, Tue: Rice leftovers (lunch) + soup
+  // Wed: swallow1 + soup1, Thu: easy, Fri: swallow2 + soup2, Sat: easy
+  const plan = [
+    { day:'Sunday',    lunch: sundayRice,  dinner: sundayRice,  note:'Cook big pot — feeds Mon & Tue too' },
+    { day:'Monday',    lunch: CARRY,       dinner: easy1,       note:'Use Sunday rice for lunch' },
+    { day:'Tuesday',   lunch: CARRY,       dinner: `${soup1} + Eba/Rice`, note:'Finish Sunday rice at lunch' },
+    { day:'Wednesday', lunch: swallow1,    dinner: easy2,       note:'Swallow day 1 of 2' },
+    { day:'Thursday',  lunch: easy3,       dinner: `${soup2}`,  note:'Light & nourishing' },
+    { day:'Friday',    lunch: swallow2,    dinner: `${soup2} + Rice`, note:'Swallow day 2 of 2' },
+    { day:'Saturday',  lunch: `Beans & Plantain`, dinner: `Pepper Soup or light soup`, note:'Easy weekend meal' },
+  ];
+
+  const dayColors = ['var(--accent4)','var(--accent)','var(--accent)','var(--accent2)','var(--accent4)','var(--accent2)','var(--accent3)'];
+
+  return `
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;">
+      📋 <strong style="color:var(--text);">Week ${weekNum} plan</strong> — tailored for a family of 3, easy postpartum meals.<br>
+      <span style="color:var(--text3);font-size:11px;">Plan refreshes automatically each week. Swallow appears max twice.</span>
+    </div>
+  </div>
+
+  ${plan.map((d, i) => `
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;margin-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:800;color:${dayColors[i]};">${d.day}</div>
+      <div style="font-size:10px;color:var(--text3);font-family:var(--mono);">${d.note}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="background:var(--surface);border-radius:8px;padding:8px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Lunch</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);">${d.lunch}</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:8px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Dinner</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);">${d.dinner}</div>
+      </div>
+    </div>
+  </div>`).join('')}
+
+  <div style="margin-top:4px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.7;">
+    💡 <strong style="color:var(--text2);">Postpartum tip:</strong> Cook in bulk on Sunday & Wednesday. Keep pepper soup ingredients handy — it's quick, nourishing and great for recovery. Beans & Moi Moi are excellent protein sources for breastfeeding.
+  </div>`;
 }
 
 function recipeCard(r, color) {
