@@ -2731,6 +2731,34 @@ function renderSettings() {
         <button class="btn btn-teal btn-sm" onclick="addCustomCategory()">Add</button>
       </div>
     </div>
+
+    <div class="card" style="border-color:var(--accent3);">
+      <div class="card-title" style="color:var(--accent3);">🧹 Data Cleanup</div>
+      ${(() => {
+        const nameMap = {};
+        state.products.forEach(p => {
+          const key = (p.name||'').toLowerCase().trim();
+          if (!key) return;
+          if (!nameMap[key]) nameMap[key] = [];
+          nameMap[key].push(p);
+        });
+        const dupGroups = Object.values(nameMap).filter(g => g.length > 1);
+        const dupCount = dupGroups.reduce((acc, g) => acc + g.length - 1, 0);
+        if (dupCount === 0) {
+          return `<p style="font-size:12px;color:var(--accent);font-weight:700;">✓ No duplicates found — your product list is clean!</p>`;
+        }
+        return `
+          <p style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
+            Found <strong style="color:var(--accent3);">${dupCount} duplicate product${dupCount>1?'s':''}</strong> across ${dupGroups.length} name${dupGroups.length>1?'s':''}.
+            Clicking below will keep the most recently updated copy of each and remove the rest.
+          </p>
+          <div style="margin-bottom:12px;max-height:140px;overflow-y:auto;">
+            ${dupGroups.map(g => `<div style="font-size:11px;font-family:var(--mono);color:var(--text3);padding:3px 0;border-bottom:1px solid var(--border);">${g[0].name} <span style="color:var(--accent3);">×${g.length}</span></div>`).join('')}
+          </div>
+          <button class="btn btn-danger" onclick="deduplicateProducts()">Remove ${dupCount} Duplicate${dupCount>1?'s':''}</button>
+        `;
+      })()}
+    </div>
   `;
 }
 
@@ -2986,18 +3014,26 @@ async function sheetsPullAll() {
       });
     };
 
+    // Helper: strip commas, currency symbols, spaces before parsing numbers
+    // Handles values like "80,000" or "₦3,500" correctly
+    const parseNum = (val) => {
+      if (val === null || val === undefined || val === '') return 0;
+      const cleaned = String(val).replace(/[₦$€£,\s]/g, '');
+      return parseFloat(cleaned) || 0;
+    };
+
     const products = parseSheet(prodResp).map(r => ({
       id: r.id||'p_'+Date.now()+Math.random(), name: r.name||'',
       category: r.category||'Other', unit: r.unit||'',
-      plannedQty: parseFloat(r.plannedQty)||0, price: parseFloat(r.price)||0,
+      plannedQty: parseNum(r.plannedQty), price: parseNum(r.price),
       store: r.store||'', cycle: r.cycle||'monthly',
-      currentStock: parseFloat(r.currentStock)||0, updatedAt: r.updatedAt||''
+      currentStock: parseNum(r.currentStock), updatedAt: r.updatedAt||''
     })).filter(p => p.name);
 
     const purchases = parseSheet(buyResp).map(r => ({
       id: r.id||'buy_'+Date.now()+Math.random(), productId: r.productId||null,
-      productName: r.productName||'', qty: parseFloat(r.qty)||0,
-      price: parseFloat(r.price)||0, store: r.store||'', date: r.date||'',
+      productName: r.productName||'', qty: parseNum(r.qty),
+      price: parseNum(r.price), store: r.store||'', date: r.date||'',
       purchaseCycle: r.purchaseCycle||r.cycle||'',
       stockingCycle: r.stockingCycle||r.cycle||'',
       cycle: r.purchaseCycle||r.cycle||'',
@@ -3030,6 +3066,25 @@ async function sheetsPullAll() {
 }
 
 function mergeById(local, remote) {
+  // For products: merge by name to prevent duplicates when sheet IDs differ
+  const isProduct = remote.length > 0 && remote[0].hasOwnProperty('plannedQty');
+  if (isProduct) {
+    const nameMap = {};
+    local.forEach(i => { if(i.name) nameMap[i.name.toLowerCase()] = i; });
+    remote.forEach(i => {
+      if (!i.name) return;
+      const key = i.name.toLowerCase();
+      const existing = nameMap[key];
+      // Preserve local id if remote id looks auto-generated
+      if (existing && (!i.id || i.id.startsWith('p_'))) {
+        nameMap[key] = { ...i, id: existing.id };
+      } else {
+        nameMap[key] = i;
+      }
+    });
+    return Object.values(nameMap);
+  }
+  // For purchases and logs: merge by id
   const map = {};
   local.forEach(i => { if(i.id) map[i.id] = i; });
   remote.forEach(i => { if(i.id) map[i.id] = i; });
@@ -3308,6 +3363,32 @@ function addCustomCategory() {
   if (!state.customCategories) state.customCategories = [];
   state.customCategories.push(val);
   saveData(); showToast('Category added!'); renderTab();
+}
+
+function deduplicateProducts() {
+  const nameMap = {};
+  state.products.forEach(p => {
+    const key = (p.name||'').toLowerCase().trim();
+    if (!key) return;
+    if (!nameMap[key]) nameMap[key] = [];
+    nameMap[key].push(p);
+  });
+  let removed = 0;
+  const cleaned = [];
+  Object.values(nameMap).forEach(group => {
+    if (group.length === 1) { cleaned.push(group[0]); return; }
+    // Keep the one with the most data (highest price, or most recently updated)
+    group.sort((a,b) => {
+      if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
+      return (b.price||0) - (a.price||0);
+    });
+    cleaned.push(group[0]);
+    removed += group.length - 1;
+  });
+  state.products = cleaned;
+  saveData();
+  showToast(removed + ' duplicate' + (removed>1?'s':'') + ' removed!');
+  renderTab();
 }
 
 function removeCustomCategory(idx) {
